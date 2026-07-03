@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<!--
+  DataForge — AI-powered local data science tool
+  Copyright (C) 2026 Mohammed Farazuddin <farazfiyaz2@gmail.com>
+  License: AGPL-3.0 — see LICENSE
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DataForge</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:        #0f1117;
+  --surface:   #1a1d27;
+  --surface2:  #21253a;
+  --border:    #2e3148;
+  --accent:    #7c6fff;
+  --accent-dim:#7c6fff22;
+  --text:      #e4e6f0;
+  --muted:     #6b7094;
+  --danger:    #ff6b6b;
+  --success:   #3dd68c;
+  --sidebar-w: 260px;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system,'Segoe UI',system-ui,sans-serif; display: flex; height: 100vh; overflow: hidden; }
+
+/* ── Sidebar ── */
+#sidebar { width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+.sidebar-top { padding: 18px 14px 12px; border-bottom: 1px solid var(--border); }
+.logo { font-size: 1.2rem; font-weight: 800; letter-spacing: -.5px; margin-bottom: 12px; }
+.logo span { color: var(--accent); }
+.sb-btn { width: 100%; padding: 8px 12px; border-radius: 10px; border: 1px solid; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 7px; transition: background .15s; }
+#new-chat-btn { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+#new-chat-btn:hover { background: rgba(124,111,255,.25); }
+
+/* Project list */
+#project-list { flex: 1; overflow-y: auto; padding: 8px 8px 0; }
+.project-group { margin-bottom: 4px; }
+.project-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 8px; border-radius: 8px; cursor: pointer;
+  font-size: 0.8rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px;
+  transition: background .12s;
+}
+.project-header:hover { background: var(--surface2); color: var(--text); }
+.project-header .chevron { font-size: 0.65rem; transition: transform .2s; }
+.project-header.open .chevron { transform: rotate(90deg); }
+.project-chats { display: none; padding-left: 8px; }
+.project-chats.open { display: block; }
+.chat-item {
+  padding: 7px 10px; border-radius: 7px; font-size: 0.82rem; color: var(--muted);
+  cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  display: flex; align-items: center; gap: 6px; transition: background .12s, color .12s;
+}
+.chat-item:hover { background: var(--surface2); color: var(--text); }
+.chat-item.active { background: var(--accent-dim); color: var(--accent); }
+.chat-item .chat-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+#new-project-btn { margin: 10px 8px; padding: 7px 12px; background: none; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 6px; width: calc(100% - 16px); transition: border-color .15s, color .15s; }
+#new-project-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+.sidebar-footer { padding: 10px 14px; border-top: 1px solid var(--border); font-size: 0.72rem; color: var(--muted); display: flex; justify-content: space-between; }
+
+/* ── Modal ── */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 24px; width: 340px; }
+.modal h3 { font-size: 1rem; margin-bottom: 14px; }
+.modal input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 9px 12px; font-size: 0.9rem; font-family: inherit; }
+.modal input:focus { outline: none; border-color: var(--accent); }
+.modal-actions { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
+.modal-btn { padding: 8px 16px; border-radius: 8px; border: none; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+.modal-btn.primary { background: var(--accent); color: #fff; }
+.modal-btn.ghost { background: var(--border); color: var(--text); }
+
+/* ── Main ── */
+#main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── Welcome ── */
+#welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 40px 24px; text-align: center; }
+#welcome h1 { font-size: 2rem; font-weight: 800; letter-spacing: -.5px; }
+#welcome h1 span { color: var(--accent); }
+#welcome p { color: var(--muted); font-size: 0.95rem; max-width: 400px; line-height: 1.6; }
+.suggestion-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; max-width: 480px; width: 100%; }
+.suggestion-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; text-align: left; cursor: pointer; transition: border-color .15s, background .15s; }
+.suggestion-card:hover { border-color: var(--accent); background: var(--accent-dim); }
+.suggestion-card .s-icon { font-size: 1.2rem; margin-bottom: 5px; }
+.suggestion-card .s-title { font-size: 0.84rem; font-weight: 600; }
+.suggestion-card .s-desc  { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
+
+/* ── Conversation ── */
+#conversation { flex: 1; overflow-y: auto; padding: 28px 0 16px; display: none; flex-direction: column; }
+.turn { max-width: 740px; width: 100%; margin: 0 auto; padding: 0 24px; display: flex; flex-direction: column; gap: 4px; }
+.turn + .turn { margin-top: 24px; }
+.role-label { font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+.role-label.user { color: var(--muted); }
+.role-label.assistant { color: var(--accent); }
+.role-avatar { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 800; }
+.role-avatar.user { background: var(--surface2); color: var(--text); }
+.role-avatar.assistant { background: var(--accent); color: #fff; }
+.msg-body { font-size: 0.92rem; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+.msg-body.user-body { background: var(--surface); border: 1px solid var(--border); border-radius: 0 12px 12px 12px; padding: 11px 15px; display: inline-block; max-width: 100%; }
+
+/* Code block */
+.inline-code-block { background: #0d1020; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin: 8px 0; }
+.code-header { padding: 8px 14px; display: flex; align-items: center; justify-content: space-between; background: var(--surface2); border-bottom: 1px solid var(--border); }
+.code-lang { font-size: 0.72rem; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+.code-actions { display: flex; gap: 6px; }
+.code-btn { padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.73rem; cursor: pointer; transition: all .12s; font-family: inherit; }
+.code-btn:hover { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+.code-btn.run { background: var(--accent); color: #fff; border-color: var(--accent); }
+.code-btn.run:hover { opacity: .85; }
+.code-content { padding: 14px 16px; font-family: 'Cascadia Code','Fira Code','Consolas',monospace; font-size: 0.81rem; line-height: 1.6; overflow-x: auto; color: #c9d1e9; }
+
+/* Inline table */
+.inline-table-wrap { overflow-x: auto; margin: 8px 0; border-radius: 10px; border: 1px solid var(--border); }
+.inline-table { width: 100%; border-collapse: collapse; font-size: 0.81rem; }
+.inline-table th { background: var(--surface2); color: var(--muted); padding: 8px 13px; text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: .4px; border-bottom: 1px solid var(--border); }
+.inline-table td { padding: 8px 13px; border-bottom: 1px solid var(--border); }
+.inline-table tr:last-child td { border-bottom: none; }
+.inline-table tr:hover td { background: rgba(255,255,255,.02); }
+
+/* Inline chart */
+.inline-chart { margin: 8px 0; border-radius: 10px; overflow: hidden; max-width: 100%; display: block; border: 1px solid var(--border); }
+
+/* Auto-analyze */
+.auto-btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius: 10px; border: 1px solid var(--accent); background: var(--accent-dim); color: var(--accent); font-size: 0.84rem; font-weight: 600; cursor: pointer; transition: background .15s; margin-top: 8px; font-family: inherit; }
+.auto-btn:hover { background: rgba(124,111,255,.25); }
+.auto-btn:disabled { opacity: .4; cursor: default; }
+.cleaning-step { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--surface2); border-radius: 0 8px 8px 0; margin: 4px 0; font-size: 0.82rem; }
+.cleaning-step .step-title { font-weight: 600; color: var(--text); }
+.cleaning-step .step-detail { color: var(--muted); font-size: 0.78rem; }
+.plot-formula { font-size: 0.75rem; color: var(--muted); font-style: italic; margin: 4px 0 8px; font-family: monospace; }
+.plot-section-title { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin: 14px 0 6px; }
+.download-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--success); background: rgba(61,214,140,.1); color: var(--success); font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: background .15s; font-family: inherit; margin-top: 4px; }
+.download-btn:hover { background: rgba(61,214,140,.2); }
+
+/* Plot suggestions */
+.plot-suggestions { display: flex; flex-wrap: wrap; gap: 7px; margin: 8px 0; }
+.plot-suggest-chip { padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); font-size: 0.78rem; cursor: pointer; transition: all .12s; }
+.plot-suggest-chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+/* EDA cards */
+.eda-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); gap: 8px; margin: 8px 0; }
+.eda-stat { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.eda-stat .label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.eda-stat .value { font-size: 1.35rem; font-weight: 700; margin-top: 2px; }
+
+/* File chip */
+.file-chip { display: inline-flex; align-items: center; gap: 7px; background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 5px 11px; font-size: 0.8rem; margin-bottom: 7px; }
+.file-chip .chip-accent { color: var(--accent); }
+
+/* Typing */
+.typing { display: flex; gap: 4px; align-items: center; padding: 4px 0; }
+.typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: .4; animation: bounce .9s infinite; }
+.typing span:nth-child(2) { animation-delay: .15s; }
+.typing span:nth-child(3) { animation-delay: .3s; }
+@keyframes bounce { 0%,80%,100%{transform:scale(.8);opacity:.4} 40%{transform:scale(1.2);opacity:1} }
+
+/* ── Input bar ── */
+#input-area { padding: 12px 24px 16px; background: var(--bg); border-top: 1px solid var(--border); width: 100%; max-width: 788px; align-self: center; }
+#input-wrap { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; transition: border-color .15s; }
+#input-wrap:focus-within { border-color: var(--accent); }
+#attached-file { display: none; align-items: center; gap: 7px; padding: 8px 13px 0; font-size: 0.8rem; color: var(--muted); }
+#attached-file.visible { display: flex; }
+#attached-file .fname { color: var(--text); font-weight: 600; }
+#remove-file { background: none; border: none; color: var(--muted); cursor: pointer; font-size: .95rem; padding: 0 2px; }
+#remove-file:hover { color: var(--danger); }
+#msg-input { flex: 1; background: transparent; border: none; color: var(--text); font-size: 0.92rem; padding: 13px 15px 8px; resize: none; min-height: 50px; max-height: 180px; font-family: inherit; line-height: 1.5; }
+#msg-input:focus { outline: none; }
+#msg-input::placeholder { color: var(--muted); }
+.input-bottom { display: flex; align-items: center; justify-content: space-between; padding: 5px 10px 9px; }
+.input-left { display: flex; align-items: center; gap: 6px; }
+#attach-btn { background: none; border: 1px solid var(--border); border-radius: 7px; color: var(--muted); cursor: pointer; padding: 5px 9px; font-size: .95rem; transition: all .12s; }
+#attach-btn:hover { color: var(--text); border-color: var(--text); }
+#mode-select { background: none; border: 1px solid var(--border); border-radius: 7px; color: var(--muted); padding: 5px 9px; font-size: 0.78rem; cursor: pointer; font-family: inherit; }
+#mode-select:focus { outline: none; border-color: var(--accent); }
+.agent-step { border-left: 2px solid var(--border); margin: 8px 0 8px 4px; padding-left: 12px; }
+.agent-step-label { font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+.agent-step-label .spin { animation: spin .7s linear infinite; display: inline-block; }
+.agent-step-label.error { color: var(--warning, #e0a020); }
+.agent-step details { font-size: 0.8rem; }
+.agent-step details summary { cursor: pointer; color: var(--muted); font-size: 0.75rem; user-select: none; }
+#file-input { display: none; }
+#send-btn { width: 34px; height: 34px; border-radius: 9px; background: var(--accent); border: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: .95rem; transition: opacity .15s; flex-shrink: 0; }
+#send-btn:disabled { opacity: .3; cursor: default; }
+#send-btn:not(:disabled):hover { opacity: .85; }
+.input-hint { text-align: center; font-size: 0.7rem; color: var(--muted); margin-top: 6px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<nav id="sidebar">
+  <div class="sidebar-top">
+    <div class="logo">Data<span>Forge</span></div>
+    <button class="sb-btn" id="new-chat-btn">＋ New chat</button>
+  </div>
+  <div id="project-list"></div>
+  <button id="new-project-btn">＋ New project</button>
+  <div class="sidebar-footer">
+    <span>DataForge v0.1</span>
+    <span>© 2026 Mohammed Farazuddin</span>
+  </div>
+</nav>
+
+<!-- New Project Modal -->
+<div class="modal-overlay" id="project-modal" style="display:none">
+  <div class="modal">
+    <h3>New Project</h3>
+    <input type="text" id="project-name-input" placeholder="Project name…" maxlength="40" />
+    <div class="modal-actions">
+      <button class="modal-btn ghost" id="modal-cancel">Cancel</button>
+      <button class="modal-btn primary" id="modal-create">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Main -->
+<div id="main">
+
+  <!-- Welcome -->
+  <div id="welcome">
+    <h1>Hello, I'm <span>DataForge</span></h1>
+    <p>Your local AI data scientist. Upload a CSV or Excel file and ask me anything about your data.</p>
+    <div class="suggestion-grid">
+      <div class="suggestion-card" data-prompt="Analyze my dataset and give me a full summary including data types, missing values, and key statistics.">
+        <div class="s-icon">📊</div>
+        <div class="s-title">Analyze my data</div>
+        <div class="s-desc">Full EDA: shape, nulls, distributions</div>
+      </div>
+      <div class="suggestion-card" data-prompt="Plot the distribution of every numeric column using histograms. Explain the formula used.">
+        <div class="s-icon">📈</div>
+        <div class="s-title">Plot distributions</div>
+        <div class="s-desc">Charts for every numeric column</div>
+      </div>
+      <div class="suggestion-card" data-prompt="Find outliers in my dataset using the IQR method and explain the formula.">
+        <div class="s-icon">🔍</div>
+        <div class="s-title">Find outliers</div>
+        <div class="s-desc">IQR-based outlier detection</div>
+      </div>
+      <div class="suggestion-card" data-prompt="Generate Python code to clean missing values in my dataset. Explain each approach.">
+        <div class="s-icon">🧹</div>
+        <div class="s-title">Clean missing data</div>
+        <div class="s-desc">Code to handle nulls and gaps</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Conversation -->
+  <div id="conversation"></div>
+
+  <!-- Input -->
+  <div id="input-area">
+    <div id="input-wrap">
+      <div id="attached-file">
+        <span>📎</span>
+        <span class="fname" id="attached-fname"></span>
+        <button id="remove-file" title="Remove">✕</button>
+      </div>
+      <textarea id="msg-input" rows="1" placeholder="Ask about your data, request a chart, or attach a file…"></textarea>
+      <div class="input-bottom">
+        <div class="input-left">
+          <button id="attach-btn" title="Attach CSV or Excel">📎</button>
+          <input type="file" id="file-input" accept=".csv,.xlsx,.xls" />
+          <select id="mode-select">
+            <option value="agent">🤖 Agent</option>
+            <option value="explain">💡 Explain</option>
+            <option value="code">📝 Code</option>
+            <option value="plot">📈 Plot</option>
+          </select>
+        </div>
+        <button id="send-btn" disabled title="Send">↑</button>
+      </div>
+    </div>
+    <div class="input-hint">DataForge runs fully locally — your data never leaves your machine</div>
+  </div>
+</div>
+
+<script>
+const API = "http://localhost:8000/api";
+
+// ── Persistence ──
+function loadDB() {
+  try { return JSON.parse(localStorage.getItem("dataforge_db") || "null") || defaultDB(); }
+  catch { return defaultDB(); }
+}
+function saveDB() { localStorage.setItem("dataforge_db", JSON.stringify(db)); }
+function defaultDB() {
+  return { projects: [{ id: uid(), name: "General", chats: [] }] };
+}
+function uid() { return Math.random().toString(36).slice(2, 10); }
+
+let db = loadDB();
+
+// ── Session state ──
+let state = {
+  projectId: db.projects[0].id,
+  chatId: null,
+  file: null,       // { name, csvRaw, profile, fileObj }
+  messages: [],     // [{role, parts}]  parts = array of {type, content}
+  streaming: false,
+  agentSessionId: null,  // persistent agent kernel id (server-side namespace)
+};
+
+// ── DOM ──
+const welcome      = document.getElementById("welcome");
+const conversation = document.getElementById("conversation");
+const msgInput     = document.getElementById("msg-input");
+const sendBtn      = document.getElementById("send-btn");
+const attachBtn    = document.getElementById("attach-btn");
+const fileInput    = document.getElementById("file-input");
+const attachedFile = document.getElementById("attached-file");
+const attachedFname= document.getElementById("attached-fname");
+const removeFile   = document.getElementById("remove-file");
+const modeSelect   = document.getElementById("mode-select");
+const newChatBtn   = document.getElementById("new-chat-btn");
+const newProjectBtn= document.getElementById("new-project-btn");
+const projectModal = document.getElementById("project-modal");
+const projectNameInput = document.getElementById("project-name-input");
+
+// ── Sidebar render ──
+function renderSidebar() {
+  const list = document.getElementById("project-list");
+  list.innerHTML = "";
+  db.projects.forEach(proj => {
+    const group = document.createElement("div");
+    group.className = "project-group";
+
+    const header = document.createElement("div");
+    header.className = "project-header" + (proj.id === state.projectId ? " open" : "");
+    header.innerHTML = `<span>▶ ${escHtml(proj.name)}</span><span class="chevron">▶</span>`;
+    header.addEventListener("click", () => {
+      state.projectId = proj.id;
+      header.classList.toggle("open");
+      chatsEl.classList.toggle("open");
+    });
+
+    const chatsEl = document.createElement("div");
+    chatsEl.className = "project-chats" + (proj.id === state.projectId ? " open" : "");
+
+    proj.chats.slice().reverse().forEach(chat => {
+      const item = document.createElement("div");
+      item.className = "chat-item" + (chat.id === state.chatId ? " active" : "");
+      item.innerHTML = `<span class="chat-dot"></span>${escHtml(chat.title || "Untitled chat")}`;
+      item.addEventListener("click", () => loadChat(proj.id, chat.id));
+      chatsEl.appendChild(item);
+    });
+
+    group.appendChild(header);
+    group.appendChild(chatsEl);
+    list.appendChild(group);
+  });
+}
+
+// ── Load a past chat ──
+function loadChat(projectId, chatId) {
+  const proj = db.projects.find(p => p.id === projectId);
+  const chat = proj?.chats.find(c => c.id === chatId);
+  if (!chat) return;
+
+  state.projectId = projectId;
+  state.chatId    = chatId;
+  state.messages  = chat.messages || [];
+  state.file      = chat.file || null;
+
+  conversation.innerHTML = "";
+  welcome.style.display = "none";
+  conversation.style.display = "flex";
+  conversation.style.flexDirection = "column";
+
+  state.messages.forEach(msg => replayMessage(msg));
+  renderSidebar();
+  scrollBottom();
+}
+
+function replayMessage(msg) {
+  if (msg.role === "user") {
+    const turn = addUserTurn(msg.text, msg.filename);
+    return turn;
+  } else {
+    const turn = addAssistantTurn();
+    renderAssistantContent(turn, msg.text, state.file);
+    if (msg.edaProfile) renderEdaResponse(turn, msg.edaProfile, msg.filename);
+    return turn;
+  }
+}
+
+// ── Save current chat ──
+function saveCurrentChat() {
+  if (!state.chatId) return;
+  const proj = db.projects.find(p => p.id === state.projectId);
+  if (!proj) return;
+  const chat = proj.chats.find(c => c.id === state.chatId);
+  if (!chat) return;
+  chat.messages = state.messages;
+  chat.file = state.file ? { name: state.file.name, profile: state.file.profile } : null;
+  saveDB();
+}
+
+// ── New chat ──
+function startNewChat() {
+  const chatId = uid();
+  const proj = db.projects.find(p => p.id === state.projectId) || db.projects[0];
+  const chat = { id: chatId, title: "New chat", messages: [], file: null };
+  proj.chats.push(chat);
+  saveDB();
+
+  state.chatId   = chatId;
+  state.messages = [];
+  state.file     = null;
+  state.streaming = false;
+
+  attachedFile.classList.remove("visible");
+  msgInput.value = "";
+  msgInput.style.height = "auto";
+  sendBtn.disabled = true;
+  conversation.innerHTML = "";
+  welcome.style.display = "flex";
+  conversation.style.display = "none";
+
+  renderSidebar();
+}
+
+newChatBtn.addEventListener("click", startNewChat);
+
+// ── New project modal ──
+newProjectBtn.addEventListener("click", () => {
+  projectNameInput.value = "";
+  projectModal.style.display = "flex";
+  setTimeout(() => projectNameInput.focus(), 50);
+});
+document.getElementById("modal-cancel").addEventListener("click", () => { projectModal.style.display = "none"; });
+document.getElementById("modal-create").addEventListener("click", createProject);
+projectNameInput.addEventListener("keydown", e => { if (e.key === "Enter") createProject(); });
+
+function createProject() {
+  const name = projectNameInput.value.trim();
+  if (!name) return;
+  const proj = { id: uid(), name, chats: [] };
+  db.projects.push(proj);
+  saveDB();
+  state.projectId = proj.id;
+  projectModal.style.display = "none";
+  renderSidebar();
+  startNewChat();
+}
+
+// ── Suggestion cards ──
+document.querySelectorAll(".suggestion-card").forEach(card => {
+  card.addEventListener("click", () => {
+    msgInput.value = card.dataset.prompt;
+    updateSendBtn();
+    msgInput.focus();
+  });
+});
+
+// ── Input ──
+function updateSendBtn() {
+  sendBtn.disabled = msgInput.value.trim() === "" && !state.file;
+}
+
+msgInput.addEventListener("input", () => {
+  msgInput.style.height = "auto";
+  msgInput.style.height = Math.min(msgInput.scrollHeight, 180) + "px";
+  updateSendBtn();
+});
+
+// ── ENTER KEY FIX ──
+msgInput.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    if (!sendBtn.disabled && !state.streaming) submit();
+  }
+});
+sendBtn.addEventListener("click", () => { if (!state.streaming) submit(); });
+
+// ── File attach ──
+attachBtn.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
+removeFile.addEventListener("click", () => {
+  state.file = null;
+  fileInput.value = "";
+  attachedFile.classList.remove("visible");
+  updateSendBtn();
+});
+
+function setFile(file) {
+  if (!state.file) state.file = {};
+  state.file.fileObj = file;
+  state.file.name    = file.name;
+  attachedFname.textContent = file.name;
+  attachedFile.classList.add("visible");
+  const reader = new FileReader();
+  reader.onload = e => { if (state.file) state.file.csvRaw = e.target.result; };
+  reader.readAsText(file);
+  updateSendBtn();
+}
+
+// ── Submit ──
+async function submit() {
+  if (state.streaming) return;
+  const text = msgInput.value.trim();
+  if (!text && !state.file) return;
+
+  // Create a chat if this is the first message
+  if (!state.chatId) startNewChat();
+
+  // Show conversation
+  welcome.style.display = "none";
+  conversation.style.display = "flex";
+  conversation.style.flexDirection = "column";
+
+  const userMsg = { role: "user", text, filename: state.file?.name || null };
+  state.messages.push(userMsg);
+  addUserTurn(text, state.file?.name || null);
+
+  msgInput.value = "";
+  msgInput.style.height = "auto";
+  sendBtn.disabled = true;
+
+  // Update chat title from first message
+  const proj = db.projects.find(p => p.id === state.projectId);
+  const chat = proj?.chats.find(c => c.id === state.chatId);
+  if (chat && chat.title === "New chat" && text) {
+    chat.title = text.slice(0, 40);
+    saveDB();
+    renderSidebar();
+  }
+
+  const fileToUpload = state.file?.fileObj || null;
+  const fileRef = state.file ? { ...state.file } : null;
+  if (fileToUpload) {
+    state.file = { ...fileRef, fileObj: null };
+    attachedFile.classList.remove("visible");
+    fileInput.value = "";
+  }
+
+  // Upload + EDA
+  if (fileToUpload) {
+    const edaTurn = addAssistantTurn();
+    showTyping(edaTurn);
+    try {
+      const form = new FormData();
+      form.append("file", fileToUpload);
+      const res = await fetch(`${API}/upload/`, { method: "POST", body: form });
+      if (!res.ok) throw new Error((await res.json()).detail);
+      const data = await res.json();
+      state.file = { ...fileRef, profile: data.profile, datasetId: data.dataset_id, fileObj: null };
+      state.agentSessionId = null;   // new dataset → fresh agent kernel
+      hideTyping(edaTurn);
+      renderEdaResponse(edaTurn, data.profile, fileToUpload.name, fileToUpload);
+
+      const edaMsg = { role: "assistant", text: "", edaProfile: data.profile, filename: fileToUpload.name };
+      state.messages.push(edaMsg);
+      saveCurrentChat();
+
+      if (text) await sendChat(text, state.file, modeSelect.value);
+    } catch (e) {
+      hideTyping(edaTurn);
+      appendText(edaTurn, `⚠️ Error: ${e.message}`);
+    }
+    return;
+  }
+
+  await sendChat(text, fileRef, modeSelect.value);
+}
+
+async function sendChat(text, fileRef, mode) {
+  if (mode === "agent") return sendAgent(text, fileRef);
+  const assistantTurn = addAssistantTurn();
+  showTyping(assistantTurn);
+  state.streaming = true;
+
+  try {
+    const res = await fetch(`${API}/chat/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text, context: buildContext(fileRef?.profile), mode }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Chat error");
+
+    hideTyping(assistantTurn);
+    const full = data.response || "";
+    renderAssistantContent(assistantTurn, full, fileRef || state.file);
+
+    state.messages.push({ role: "assistant", text: full });
+    saveCurrentChat();
+  } catch (e) {
+    hideTyping(assistantTurn);
+    appendText(assistantTurn, `⚠️ ${e.message}`);
+  } finally {
+    state.streaming = false;
+    updateSendBtn();
+  }
+}
+
+// Only ship raw CSV over the wire for small files — big data lives server-side
+function smallCsvFallback(fileRef) {
+  const csv = fileRef?.csvRaw || state.file?.csvRaw || "";
+  return csv.length < 2_000_000 ? csv : "";
+}
+
+// ── Agent mode: SSE loop with live steps ──
+async function sendAgent(text, fileRef) {
+  const turn = addAssistantTurn();
+  showTyping(turn);
+  state.streaming = true;
+
+  try {
+    const res = await fetch(`${API}/agent/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: text,
+        context: buildContext(fileRef?.profile || state.file?.profile),
+        dataset_id: fileRef?.datasetId || state.file?.datasetId || null,
+        // raw CSV only as a small-file fallback (e.g. backend restarted);
+        // big files are referenced server-side by dataset_id
+        csv_data: smallCsvFallback(fileRef),
+        session_id: state.agentSessionId || null,
+      }),
+    });
+    if (!res.ok) throw new Error((await res.text()) || "Agent error");
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "", currentStep = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let idx;
+      while ((idx = buffer.indexOf("\n\n")) !== -1) {
+        const raw = buffer.slice(0, idx); buffer = buffer.slice(idx + 2);
+        const evMatch = raw.match(/^event: (.+)$/m);
+        const dataMatch = raw.match(/^data: (.+)$/m);
+        if (!evMatch || !dataMatch) continue;
+        const ev = evMatch[1], data = JSON.parse(dataMatch[1]);
+        hideTyping(turn);
+
+        if (ev === "start") {
+          state.agentSessionId = data.session_id;
+        } else if (ev === "code") {
+          currentStep = addAgentStep(turn, data.step, data.code);
+        } else if (ev === "result") {
+          finishAgentStep(currentStep, data);
+        } else if (ev === "final") {
+          renderAssistantContent(turn, data.content || "", fileRef || state.file);
+          state.messages.push({ role: "assistant", text: data.content || "" });
+          saveCurrentChat();
+        } else if (ev === "error") {
+          appendText(turn, `⚠️ ${data.message}`);
+        }
+        scrollBottom();
+      }
+    }
+  } catch (e) {
+    hideTyping(turn);
+    appendText(turn, `⚠️ ${e.message}`);
+  } finally {
+    state.streaming = false;
+    updateSendBtn();
+  }
+}
+
+function addAgentStep(turn, step, code) {
+  const el = document.createElement("div");
+  el.className = "agent-step";
+  el.innerHTML = `
+    <div class="agent-step-label"><span class="spin">⟳</span> Step ${step} — running code…</div>
+    <details><summary>show code</summary></details>`;
+  el.querySelector("details").appendChild(buildCodeBlock("python", code, state.file));
+  turn.appendChild(el);
+  scrollBottom();
+  return el;
+}
+
+function finishAgentStep(stepEl, data) {
+  if (!stepEl) return;
+  const label = stepEl.querySelector(".agent-step-label");
+  if (data.error) {
+    label.classList.add("error");
+    label.innerHTML = "⚠ Hit an error — fixing and retrying…";
+    const details = document.createElement("details");
+    details.innerHTML = `<summary>show error</summary><pre class="code-content" style="white-space:pre-wrap">${escHtml(data.error)}</pre>`;
+    stepEl.appendChild(details);
+  } else {
+    label.innerHTML = "✓ Step complete";
+    renderExecutionResult(stepEl, data);
+  }
+  scrollBottom();
+}
+
+// ── DOM helpers ──
+function addUserTurn(text, filename) {
+  const turn = document.createElement("div");
+  turn.className = "turn";
+  turn.innerHTML = `<div class="role-label user"><div class="role-avatar user">F</div> You</div>
+    ${filename ? `<div class="file-chip"><span class="chip-accent">📎</span> ${escHtml(filename)}</div>` : ""}
+    ${text ? `<div class="msg-body user-body">${escHtml(text)}</div>` : ""}`;
+  conversation.appendChild(turn);
+  scrollBottom();
+  return turn;
+}
+
+function addAssistantTurn() {
+  const turn = document.createElement("div");
+  turn.className = "turn";
+  turn.innerHTML = `<div class="role-label assistant"><div class="role-avatar assistant">D</div> DataForge</div>`;
+  conversation.appendChild(turn);
+  scrollBottom();
+  return turn;
+}
+
+function showTyping(turn) {
+  const t = document.createElement("div");
+  t.className = "typing"; t.dataset.typing = "1";
+  t.innerHTML = "<span></span><span></span><span></span>";
+  turn.appendChild(t); scrollBottom();
+}
+function hideTyping(turn) { turn.querySelectorAll("[data-typing]").forEach(e => e.remove()); }
+
+function appendText(turn, text) {
+  const p = document.createElement("div");
+  p.className = "msg-body"; p.textContent = text;
+  turn.appendChild(p); scrollBottom();
+}
+
+// ── EDA inline ──
+function renderEdaResponse(turn, profile, filename, fileObj) {
+  const intro = document.createElement("div");
+  intro.className = "msg-body";
+  intro.textContent = `I've analyzed ${escHtml(filename || "your file")}. Here's what I found:`;
+  turn.appendChild(intro);
+
+  const cards = document.createElement("div");
+  cards.className = "eda-cards";
+  const totalNulls = profile.columns.reduce((a,c) => a + c.null_count, 0);
+  cards.innerHTML = `
+    <div class="eda-stat"><div class="label">Rows</div><div class="value">${profile.shape.rows.toLocaleString()}</div></div>
+    <div class="eda-stat"><div class="label">Columns</div><div class="value">${profile.shape.cols}</div></div>
+    <div class="eda-stat"><div class="label">Duplicates</div><div class="value">${profile.duplicates}</div></div>
+    <div class="eda-stat"><div class="label">Missing</div><div class="value">${totalNulls.toLocaleString()}</div></div>
+  `;
+  turn.appendChild(cards);
+
+  const numeric = profile.columns.filter(c => c.kind === "numeric");
+  const categ   = profile.columns.filter(c => c.kind === "categorical");
+  const summary = document.createElement("div");
+  summary.className = "msg-body";
+  summary.style.marginTop = "6px";
+  summary.textContent = `${numeric.length} numeric and ${categ.length} categorical columns. Ask me anything — or click Auto Analyze to clean the data and generate all plots automatically.`;
+  turn.appendChild(summary);
+
+  // Plot suggestions
+  if (numeric.length > 0) {
+    const suggestLabel = document.createElement("div");
+    suggestLabel.className = "plot-section-title";
+    suggestLabel.textContent = "Suggested plots";
+    turn.appendChild(suggestLabel);
+
+    const suggestions = buildPlotSuggestions(numeric, categ);
+    const chips = document.createElement("div");
+    chips.className = "plot-suggestions";
+    suggestions.forEach(s => {
+      const chip = document.createElement("button");
+      chip.className = "plot-suggest-chip";
+      chip.textContent = s;
+      chip.addEventListener("click", () => {
+        msgInput.value = s;
+        modeSelect.value = "plot";
+        updateSendBtn();
+        msgInput.focus();
+      });
+      chips.appendChild(chip);
+    });
+    turn.appendChild(chips);
+  }
+
+  // Auto Analyze button
+  const autoBtn = document.createElement("button");
+  autoBtn.className = "auto-btn";
+  autoBtn.innerHTML = "🔬 Auto Analyze — clean data + generate all plots";
+  autoBtn.addEventListener("click", async () => {
+    if (!fileObj) return;
+    autoBtn.disabled = true;
+    autoBtn.innerHTML = '<span style="animation:spin .7s linear infinite;display:inline-block">⟳</span> Analyzing…';
+    await runAutoAnalyze(fileObj, filename);
+    autoBtn.remove();
+  });
+  turn.appendChild(autoBtn);
+
+  scrollBottom();
+}
+
+function buildPlotSuggestions(numeric, categ) {
+  const suggestions = [];
+  const numNames = numeric.map(c => c.name);
+  const catNames = categ.map(c => c.name);
+
+  if (numNames.length >= 1) suggestions.push(`Plot histogram of ${numNames[0]}`);
+  if (numNames.length >= 2) suggestions.push(`Scatter plot of ${numNames[0]} vs ${numNames[1]}`);
+  if (numNames.length >= 2) suggestions.push(`Correlation heatmap of all numeric columns`);
+  if (numNames.length >= 1) suggestions.push(`Box plot of ${numNames[0]} to find outliers`);
+  if (catNames.length >= 1) suggestions.push(`Bar chart of top values in ${catNames[0]}`);
+  if (numNames.length >= 1) suggestions.push(`Line chart of ${numNames[0]} over time`);
+  if (numNames.length >= 2) suggestions.push(`Distribution comparison: ${numNames[0]} vs ${numNames[1]}`);
+
+  return suggestions.slice(0, 6);
+}
+
+// ── Auto Analyze ──
+async function runAutoAnalyze(fileObj, filename) {
+  const resultTurn = addAssistantTurn();
+  showTyping(resultTurn);
+
+  try {
+    const form = new FormData();
+    form.append("file", fileObj);
+    const res = await fetch(`${API}/autoanalyze/`, { method: "POST", body: form });
+    if (!res.ok) throw new Error((await res.json()).detail || "Auto-analyze failed");
+    const data = await res.json();
+    hideTyping(resultTurn);
+    renderAutoAnalyzeResult(resultTurn, data);
+
+    state.messages.push({ role: "assistant", text: "[Auto Analyze complete]" });
+    saveCurrentChat();
+  } catch (e) {
+    hideTyping(resultTurn);
+    appendText(resultTurn, `⚠️ ${e.message}`);
+  }
+}
+
+function renderAutoAnalyzeResult(turn, data) {
+  // Cleaning report
+  const cleanTitle = document.createElement("div");
+  cleanTitle.className = "msg-body";
+  cleanTitle.innerHTML = `<strong>🧹 Auto-Clean Report</strong> — ${data.cleaned_shape.rows.toLocaleString()} rows × ${data.cleaned_shape.cols} columns after cleaning`;
+  turn.appendChild(cleanTitle);
+
+  data.cleaning_report.forEach(step => {
+    const el = document.createElement("div");
+    el.className = "cleaning-step";
+    el.innerHTML = `<span class="step-title">${escHtml(step.step)}</span><span class="step-detail">${escHtml(step.detail)}</span>`;
+    turn.appendChild(el);
+  });
+
+  // Download cleaned CSV
+  if (data.cleaned_csv_b64) {
+    const dlBtn = document.createElement("button");
+    dlBtn.className = "download-btn";
+    dlBtn.innerHTML = "⬇ Download cleaned CSV";
+    dlBtn.addEventListener("click", () => {
+      const bytes = atob(data.cleaned_csv_b64);
+      const blob  = new Blob([bytes], { type: "text/csv" });
+      const url   = URL.createObjectURL(blob);
+      const a     = document.createElement("a");
+      a.href = url; a.download = "cleaned_" + (data.filename || "data.csv");
+      a.click(); URL.revokeObjectURL(url);
+    });
+    turn.appendChild(dlBtn);
+  }
+
+  // Plots
+  if (data.plots?.length) {
+    const plotsTitle = document.createElement("div");
+    plotsTitle.className = "plot-section-title";
+    plotsTitle.style.marginTop = "16px";
+    plotsTitle.textContent = `📊 Auto-Generated Plots (${data.plots.length})`;
+    turn.appendChild(plotsTitle);
+
+    data.plots.forEach(plot => {
+      const pTitle = document.createElement("div");
+      pTitle.className = "msg-body";
+      pTitle.style.fontWeight = "600";
+      pTitle.style.marginTop = "12px";
+      pTitle.textContent = plot.title;
+      turn.appendChild(pTitle);
+
+      if (plot.formula) {
+        const formula = document.createElement("div");
+        formula.className = "plot-formula";
+        formula.textContent = "Formula: " + plot.formula;
+        turn.appendChild(formula);
+      }
+
+      const img = document.createElement("img");
+      img.className = "inline-chart";
+      img.src = "data:image/png;base64," + plot.chart;
+      turn.appendChild(img);
+    });
+  }
+
+  scrollBottom();
+}
+
+// ── Assistant rich content ──
+function renderAssistantContent(turn, text, fileRef) {
+  splitByCodeBlocks(text).forEach(part => {
+    if (part.type === "text" && part.content.trim()) {
+      const p = document.createElement("div");
+      p.className = "msg-body"; p.textContent = part.content;
+      turn.appendChild(p);
+    } else if (part.type === "code") {
+      turn.appendChild(buildCodeBlock(part.lang, part.content, fileRef));
+    }
+  });
+  scrollBottom();
+}
+
+function splitByCodeBlocks(text) {
+  const parts = [], re = /```(\w*)\n([\s\S]*?)```/g;
+  let last = 0, m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push({ type: "text", content: text.slice(last, m.index) });
+    parts.push({ type: "code", lang: m[1] || "python", content: m[2].trim() });
+    last = re.lastIndex;
+  }
+  if (last < text.length) parts.push({ type: "text", content: text.slice(last) });
+  return parts;
+}
+
+function buildCodeBlock(lang, code, fileRef) {
+  const wrap = document.createElement("div");
+  wrap.className = "inline-code-block";
+  wrap.innerHTML = `
+    <div class="code-header">
+      <span class="code-lang">${escHtml(lang)}</span>
+      <div class="code-actions">
+        <button class="code-btn copy-btn">Copy</button>
+        <button class="code-btn run run-btn">▶ Run</button>
+      </div>
+    </div>
+    <pre class="code-content"><code>${escHtml(code)}</code></pre>`;
+  wrap.querySelector(".copy-btn").onclick = () => {
+    navigator.clipboard.writeText(code);
+    const btn = wrap.querySelector(".copy-btn");
+    btn.textContent = "Copied!";
+    setTimeout(() => btn.textContent = "Copy", 1500);
+  };
+  wrap.querySelector(".run-btn").onclick = () => {
+    runCode(code, smallCsvFallback(fileRef), fileRef?.datasetId || state.file?.datasetId || "");
+  };
+  return wrap;
+}
+
+// ── Run code ──
+async function runCode(code, csvRaw, datasetId = "") {
+  const resultTurn = addAssistantTurn();
+  showTyping(resultTurn);
+  try {
+    const res = await fetch(`${API}/execute/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, csv_data: csvRaw, dataset_id: datasetId }),
+    });
+    const data = await res.json();
+    hideTyping(resultTurn);
+    if (!res.ok) throw new Error(data.detail || "Execution failed");
+    renderExecutionResult(resultTurn, data);
+
+    state.messages.push({ role: "assistant", text: "", result: true });
+    saveCurrentChat();
+  } catch (e) {
+    hideTyping(resultTurn);
+    appendText(resultTurn, `⚠️ ${e.message}`);
+  }
+}
+
+function renderExecutionResult(turn, data) {
+  if (data.chart) {
+    const img = document.createElement("img");
+    img.className = "inline-chart";
+    img.src = "data:image/png;base64," + data.chart;
+    turn.appendChild(img);
+  }
+  if (data.table?.length) {
+    const keys = Object.keys(data.table[0]);
+    const wrap = document.createElement("div");
+    wrap.className = "inline-table-wrap";
+    wrap.innerHTML = `<table class="inline-table">
+      <thead><tr>${keys.map(k=>`<th>${escHtml(k)}</th>`).join("")}</tr></thead>
+      <tbody>${data.table.map(row=>`<tr>${keys.map(k=>`<td>${escHtml(String(row[k]))}</td>`).join("")}</tr>`).join("")}</tbody>
+    </table>`;
+    turn.appendChild(wrap);
+  }
+  if (data.stdout) {
+    const pre = document.createElement("div");
+    pre.className = "msg-body";
+    pre.style.cssText = "font-family:monospace;color:var(--success);";
+    pre.textContent = data.stdout;
+    turn.appendChild(pre);
+  }
+  if (!data.chart && !data.table && !data.stdout) {
+    appendText(turn, "✓ Code ran successfully with no output.");
+  }
+  scrollBottom();
+}
+
+// ── Helpers ──
+function buildContext(profile) {
+  if (!profile) return null;
+  return `Rows: ${profile.shape.rows} | Columns: ${profile.columns.map(c=>`${c.name}(${c.dtype})`).join(", ")}`;
+}
+function scrollBottom() { conversation.scrollTop = conversation.scrollHeight; }
+function escHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+// ── Init ──
+renderSidebar();
+</script>
+</body>
+</html>

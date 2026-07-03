@@ -1,0 +1,46 @@
+{
+  "name": "dataforge",
+  "version": "0.1.0",
+  "description": "AI-powered local data science tool",
+  "author": "Mohammed Farazuddin <farazfiyaz2@gmail.com>",
+  "license": "AGPL-3.0",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.farazuddin.dataforge",
+    "productName": "DataForge",
+    "copyright": "Copyright © 2026 Mohammed Farazuddin",
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icon.png"
+    },
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend"
+      },
+      {
+        "from": "frontend",
+        "to": "frontend"
+      }
+    ]
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  }
+}

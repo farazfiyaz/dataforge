@@ -1,0 +1,38 @@
+                    GNU AFFERO GENERAL PUBLIC LICENSE
+                       Version 3, 19 November 2007
+
+Copyright (C) 2026 Mohammed Farazuddin
+Contact: farazfiyaz2@gmail.com
+
+DataForge — AI-powered local data science tool
+https://github.com/farazfiyaz/dataforge
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+─────────────────────────────────────────────────────────────────────────────
+
+                    WHAT THIS LICENSE MEANS IN PLAIN ENGLISH
+
+1. You can view, study, and fork this code freely.
+2. If you use this code in any product or service (including hosted/SaaS),
+   you MUST release that product's entire source code under AGPL-3.0.
+3. You cannot sublicense, rebrand, or sell this software under a different
+   license without written permission from Mohammed Farazuddin.
+4. Credit must be given to the original author in all derivative works.
+
+For commercial licensing inquiries: farazfiyaz2@gmail.com
+
+─────────────────────────────────────────────────────────────────────────────
+
+Full license text: https://www.gnu.org/licenses/agpl-3.0.txt

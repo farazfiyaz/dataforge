@@ -1,0 +1,208 @@
+# DataForge — AI-powered local data science tool
+# Copyright (C) 2026 Mohammed Farazuddin <farazfiyaz2@gmail.com>
+# License: AGPL-3.0 — see LICENSE
+"""
+Agentic loop — the thing that makes DataForge work like Claude.
+
+Instead of one LLM call → one answer, we loop:
+    LLM → wants to run code? → execute → feed result (or traceback) back → LLM again
+until the model gives a final text answer or we hit MAX_ITERATIONS.
+
+Errors are NOT shown to the user as failures — they're sent back to the model,
+which fixes its own code and retries (self-correction).
+
+Each step is streamed to the frontend as a Server-Sent Event so the user can
+watch the agent work in real time.
+"""
+
+import json
+import uuid
+from typing import Optional
+
+from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+
+from services.llm import chat_ollama
+from services.executor import run_code, reset_session
+
+router = APIRouter()
+
+MAX_ITERATIONS = 10
+MAX_HISTORY = 40   # messages kept per conversation (excluding system prompt)
+
+# Conversation history per session — this is what makes follow-ups like
+# "that's wrong, fix it" or "make the bars horizontal" actually work:
+# the model sees everything it did before, and the kernel still has its variables.
+_CONVERSATIONS: dict[str, list[dict]] = {}
+
+# Tool schema the model sees (Ollama / OpenAI style)
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "run_python",
+            "description": (
+                "Execute Python code against the loaded dataset. "
+                "Available: `df` (pandas DataFrame), `pd`, `np` (numpy), `plt` (matplotlib), "
+                "`sns` (seaborn). You may also import: scipy, sklearn, plotly, math, statistics, "
+                "datetime, re, json, itertools, collections. "
+                "Variables PERSIST between calls, like a notebook. "
+                "Use print() to see values. Returns stdout, an optional table, and any error."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "Python code to execute.",
+                    }
+                },
+                "required": ["code"],
+            },
+        },
+    }
+]
+
+SYSTEM_PROMPT = """You are DataForge, an autonomous AI data scientist.
+
+You have a `run_python` tool. The user's dataset is loaded as a pandas DataFrame `df`.
+Work step by step like a data scientist in a notebook:
+1. Inspect the data first if you're unsure of its shape (df.head(), df.dtypes, etc.).
+2. Run small steps, look at the output, then decide what to do next.
+3. If your code errors, read the traceback and fix it — do not apologize, just retry.
+4. Variables persist between run_python calls AND between user messages —
+   if the user says "fix it" or "change the color", build on what you already did.
+
+Plotting — any chart type is fine (matplotlib `plt`, seaborn `sns`, numpy `np`):
+- Always plt.style.use('dark_background'); add titles and axis labels.
+- Heatmaps, boxplots, violin plots, pairplots, regression plots — use seaborn when it's cleaner.
+
+Big datasets — be memory- and output-conscious:
+- NEVER print an entire large DataFrame; use .head(), .describe(), .value_counts().head(20).
+- For scatter plots with >5000 rows, plot a random sample: df.sample(5000, random_state=42).
+- Prefer vectorized pandas/numpy operations over Python loops.
+
+When you have fully answered the user's question, reply with plain text (no tool call):
+a concise summary of what you found, including concrete numbers.
+
+Dataset schema:
+{schema}
+"""
+
+
+class AgentRequest(BaseModel):
+    message: str
+    context: Optional[str] = None    # dataset schema string
+    csv_data: str = ""               # raw CSV fallback (small files only)
+    dataset_id: Optional[str] = None # server-side dataset reference (big files)
+    session_id: Optional[str] = None
+
+
+def _sse(event: str, data: dict) -> str:
+    """Format one Server-Sent Event."""
+    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+
+def _tool_result_for_llm(result: dict) -> str:
+    """Compact, token-friendly version of an execution result for the model."""
+    if result.get("error"):
+        return json.dumps({"error": result["error"][-2000:]})
+    payload = {"stdout": (result.get("stdout") or "")[-3000:]}
+    if result.get("table") is not None:
+        payload["table_preview"] = result["table"][:10]
+        payload["table_rows_returned"] = len(result["table"])
+    if result.get("chart"):
+        payload["chart"] = "rendered and shown to the user"
+    return json.dumps(payload, default=str)
+
+
+def _save_conversation(session_id: str, messages: list[dict]) -> None:
+    """Persist history, trimmed to system prompt + last MAX_HISTORY messages."""
+    _CONVERSATIONS[session_id] = [messages[0]] + messages[1:][-MAX_HISTORY:]
+
+
+@router.post("/")
+async def agent(req: AgentRequest):
+    """Run the agentic loop, streaming steps as SSE."""
+    session_id = req.session_id or uuid.uuid4().hex
+
+    # Continue the existing conversation if there is one — this is what lets
+    # the user say "fix it" / "now color by category" and have it just work
+    messages = _CONVERSATIONS.get(session_id)
+    if messages is None:
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT.format(schema=req.context or "unknown")},
+        ]
+    messages.append({"role": "user", "content": req.message})
+
+    async def stream():
+        yield _sse("start", {"session_id": session_id})
+
+        for step in range(1, MAX_ITERATIONS + 1):
+            try:
+                assistant = await chat_ollama(messages, tools=TOOLS)
+            except Exception as e:
+                yield _sse("error", {"message": f"Ollama error: {e}"})
+                return
+
+            messages.append(assistant)
+            tool_calls = assistant.get("tool_calls") or []
+
+            # No tool call → model is done; its content is the final answer
+            if not tool_calls:
+                _save_conversation(session_id, messages)
+                yield _sse("final", {"content": assistant.get("content", ""), "steps": step})
+                return
+
+            for call in tool_calls:
+                fn = call.get("function", {})
+                if fn.get("name") != "run_python":
+                    messages.append({"role": "tool", "content": json.dumps({"error": "unknown tool"})})
+                    continue
+
+                args = fn.get("arguments") or {}
+                if isinstance(args, str):          # some models return JSON strings
+                    try:
+                        args = json.loads(args)
+                    except json.JSONDecodeError:
+                        args = {"code": args}
+                code = args.get("code", "")
+
+                yield _sse("code", {"step": step, "code": code})
+
+                result = run_code(code, req.csv_data, session_id=session_id,
+                                  dataset_id=req.dataset_id)
+
+                # Stream the human-facing result (full chart, full table)
+                yield _sse("result", {
+                    "step": step,
+                    "stdout": result.get("stdout"),
+                    "table": result.get("table"),
+                    "chart": result.get("chart"),
+                    "error": result.get("error"),
+                    "retrying": bool(result.get("error")),
+                })
+
+                # Feed a compact version back to the model — including errors,
+                # which is what lets it self-correct
+                messages.append({"role": "tool", "content": _tool_result_for_llm(result)})
+
+        _save_conversation(session_id, messages)
+        yield _sse("final", {
+            "content": "Reached the maximum number of steps without a final answer. "
+                       "Here is what was done so far — try narrowing the question.",
+            "steps": MAX_ITERATIONS,
+        })
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@router.post("/reset")
+async def reset(req: AgentRequest):
+    """Clear a session's variables and history (e.g. when a new file is uploaded)."""
+    if req.session_id:
+        reset_session(req.session_id)
+        _CONVERSATIONS.pop(req.session_id, None)
+    return {"status": "ok"}

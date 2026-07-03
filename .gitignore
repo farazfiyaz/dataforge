@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+backend/venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Build output
+dist/
+build/
+*.exe
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local data
+*.log
+uploads/

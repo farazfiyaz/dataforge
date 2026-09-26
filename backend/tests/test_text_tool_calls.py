@@ -194,3 +194,28 @@ def test_final_answers_with_example_code_are_not_rerun(content):
 ])
 def test_call_object_with_surrounding_prose(content):
     assert _text_tool_calls(content) == [{"function": {"name": "run_python", "arguments": {"code": CODE}}}]
+
+
+def test_python_block_after_a_failed_step_is_run_as_the_fix(client, monkeypatch):
+    # seen live: step errored, then "Let's update the code…" + a fixed block
+    _fake_replies(monkeypatch, [
+        {"role": "assistant", "content": json.dumps({"name": "run_python", "arguments": {"code": "1 / 0"}})},
+        {"role": "assistant", "content": f"Let's update the code to avoid that:\n{FENCE}python\nprint(6 * 7)\n{FENCE}"},
+        {"role": "assistant", "content": "It's 42."},
+    ])
+    res = client.post("/api/agent/", json={"message": "go"}, headers={"Origin": APP_ORIGIN})
+    events = _events(res)
+    assert [e for e, _ in events] == ["start", "code", "result", "code", "result", "final"]
+    assert events[2][1]["error"] and events[4][1]["stdout"].strip() == "42"
+
+
+def test_system_prompt_describes_values_from_the_data(client, monkeypatch):
+    seen = []
+    async def fake_llm(messages, tools=None):
+        seen.append(messages[0]["content"])
+        return {"role": "assistant", "content": "ok"}
+    monkeypatch.setattr(agent_router, "chat_ollama", fake_llm)
+    client.post("/api/agent/", json={"message": "hi", "dataset_id": _upload(client), "context": "churn(str)"},
+                headers={"Origin": APP_ORIGIN})
+    assert "- churn: text, 2 values: 'no', 'yes'" in seen[0]
+    assert "- age: numeric" in seen[0]

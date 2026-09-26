@@ -21,6 +21,7 @@ import uuid
 from collections import OrderedDict
 from typing import Optional
 
+import pandas as pd
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -102,6 +103,9 @@ Workspace files — if the user has set a workspace folder, you can browse it yo
 Use these when the user mentions files by name, asks what data is available, or wants
 to combine multiple files. If they raise "No workspace folder is set", tell the user
 to set one with the 📁 Workspace button.
+
+Text columns can't be averaged. For the rate of a yes/no column use
+(df['churn'] == 'yes').mean(), or df.groupby('plan')['churn'].apply(lambda s: (s == 'yes').mean()).
 
 Big datasets — be memory- and output-conscious:
 - NEVER print an entire large DataFrame; use .head(), .describe(), .value_counts().head(20).
@@ -235,6 +239,36 @@ def _helper_call_as_code(name: str, args: dict) -> str | None:
     return None
 
 
+def _schema(dataset_id: Optional[str]) -> Optional[str]:
+    """
+    Describe the dataset for the system prompt, from the data itself: types
+    plus value hints. The frontend only sent `churn(str)`, so the model didn't
+    know churn was yes/no and kept calling .mean() on it.
+    """
+    df = get_dataset(dataset_id) if dataset_id else None
+    if df is None:
+        return None
+    lines = [f"{len(df):,} rows × {len(df.columns)} columns:"]
+    for col in df.columns[:60]:
+        s = df[col]
+        nulls = f", {int(s.isna().sum()):,} missing" if s.isna().any() else ""
+        if pd.api.types.is_numeric_dtype(s) and not pd.api.types.is_bool_dtype(s):
+            lines.append(f"- {col}: numeric ({s.dtype}), range {s.min():g} to {s.max():g}{nulls}")
+        elif pd.api.types.is_datetime64_any_dtype(s):
+            lines.append(f"- {col}: datetime, {s.min()} to {s.max()}{nulls}")
+        else:
+            n = s.nunique()
+            if n <= 10:
+                values = ", ".join(repr(v) for v in sorted(s.dropna().astype(str).unique()))
+                lines.append(f"- {col}: text, {n} values: {values}{nulls}")
+            else:
+                sample = ", ".join(repr(v) for v in s.dropna().astype(str).unique()[:3])
+                lines.append(f"- {col}: text, {n:,} distinct values, e.g. {sample}{nulls}")
+    if len(df.columns) > 60:
+        lines.append(f"- … and {len(df.columns) - 60} more columns")
+    return "\n".join(lines)
+
+
 def _sse(event: str, data: dict) -> str:
     """Format one Server-Sent Event."""
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
@@ -299,14 +333,18 @@ async def agent(req: AgentRequest):
         _CONVERSATIONS.move_to_end(session_id)
     if messages is None:
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT.format(schema=req.context or "unknown")},
+            {"role": "system", "content": SYSTEM_PROMPT.format(
+                schema=_schema(req.dataset_id) or req.context or "unknown")},
         ]
     messages.append({"role": "user", "content": req.message})
 
     async def stream():
         yield _sse("start", {"session_id": session_id})
 
-        ran_code = False   # until something runs, ```python blocks are code to run, not examples
+        # ```python blocks in a reply are code to run (not examples) until
+        # something has run, and again right after a failed step: then they're
+        # the model's fix, and treating them as a final answer ends the retry
+        expect_code = True
         for step in range(1, MAX_ITERATIONS + 1):
             try:
                 assistant = await chat_ollama(messages, tools=TOOLS)
@@ -317,7 +355,8 @@ async def agent(req: AgentRequest):
                 yield _sse("error", {"message": f"Ollama error: {e}"})
                 return
 
-            tool_calls = assistant.get("tool_calls") or                 _text_tool_calls(assistant.get("content", ""), allow_code_blocks=not ran_code)
+            tool_calls = (assistant.get("tool_calls")
+                          or _text_tool_calls(assistant.get("content", ""), allow_code_blocks=expect_code))
             if tool_calls:
                 # store the normalized call so the model's history shows correct usage
                 tool_calls = _normalize_calls(tool_calls)
@@ -348,7 +387,6 @@ async def agent(req: AgentRequest):
 
                 args = fn.get("arguments") or {}
                 code = args.get("code", "") if isinstance(args, dict) else str(args)
-                ran_code = True
 
                 yield _sse("code", {"step": step, "code": code})
 
@@ -368,6 +406,7 @@ async def agent(req: AgentRequest):
                 # Feed a compact version back to the model — including errors,
                 # which is what lets it self-correct
                 messages.append({"role": "tool", "content": _tool_result_for_llm(result)})
+                expect_code = bool(result.get("error"))
 
         _save_conversation(session_id, messages)
         yield _sse("final", {

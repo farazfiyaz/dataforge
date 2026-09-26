@@ -116,6 +116,17 @@ Square labelled heatmaps (correlation matrices) name their three strongest
 off-diagonal pairs. Live: the outlier question now answers "most values between
 0 and 3, outliers at 4, 5, 6, 7", which is exactly right.
 
+### 2026-09-27 — Agent retries after errors; schema with real values
+Live two-turn test: turn 1 drew a wrong chart (`.mean()` on the yes/no `churn`
+text column, reported "0% / 0% / 22%"), and turn 2 hit the same error, then gave
+up with "Let's update the code…" because its fix, a ```python block, was taken
+as the final answer. Now:
+- a code block right after a failed step is run as the fix;
+- the system prompt's schema is built from the data (`churn: text, 2 values: 'no', 'yes'`,
+  numeric ranges). The frontend only sent `churn(str)`;
+- one prompt line explains yes/no rates.
+Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

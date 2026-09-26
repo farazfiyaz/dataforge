@@ -5,8 +5,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 from services.eda import run_eda
 from services.datastore import put_dataset
 from services.recommend import recommend
-import pandas as pd
-import io
+from services.loader import read_table
 import uuid
 
 router = APIRouter()
@@ -19,16 +18,11 @@ async def upload_file(file: UploadFile = File(...)):
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided.")
 
-    ext = file.filename.rsplit(".", 1)[-1].lower()
-    if ext not in ("csv", "xlsx", "xls"):
-        raise HTTPException(status_code=400, detail="Only CSV and Excel files are supported.")
-
     contents = await file.read()
     try:
-        if ext == "csv":
-            df = pd.read_csv(io.BytesIO(contents))
-        else:
-            df = pd.read_excel(io.BytesIO(contents))
+        df = read_table(contents, file.filename)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Could not parse file: {e}")
 

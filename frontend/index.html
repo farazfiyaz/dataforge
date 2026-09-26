@@ -674,7 +674,7 @@ button { cursor: pointer; }
           <div class="input-left">
             <button class="tool-btn" id="attach-btn" title="Attach a CSV or Excel file"><svg class="ic" aria-hidden="true"><use href="#i-paperclip"/></svg>Attach</button>
             <button class="tool-btn" id="workspace-btn" title="Choose a folder the agent can browse and load files from"><svg class="ic" aria-hidden="true"><use href="#i-folder-open"/></svg>Workspace</button>
-            <input type="file" id="file-input" accept=".csv,.xlsx,.xls" />
+            <input type="file" id="file-input" accept=".csv,.tsv,.txt,.xlsx,.xls" />
             <span class="divider" aria-hidden="true"></span>
             <div class="modes" role="radiogroup" aria-label="Mode">
               <input type="radio" name="mode" id="mode-agent" value="agent" checked /><label for="mode-agent" title="Plans, runs code, and fixes itself until it has an answer">Agent</label>
@@ -1586,7 +1586,7 @@ function renderAutoAnalyzeResult(turn, data) {
       const blob  = new Blob([bytes], { type: "text/csv" });
       const url   = URL.createObjectURL(blob);
       const a     = document.createElement("a");
-      a.href = url; a.download = "cleaned_" + (data.filename || "data.csv");
+      a.href = url; a.download = "cleaned_" + (data.filename || "data").replace(/\.[^.]+$/, "") + ".csv";   // contents are always CSV
       a.click(); URL.revokeObjectURL(url);
     });
     turn.appendChild(dlBtn);

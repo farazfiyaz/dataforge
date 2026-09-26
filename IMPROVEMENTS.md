@@ -55,6 +55,14 @@ sandbox-compiled frames stops it after `EXEC_TIMEOUT_S` (120s). The exception
 is a BaseException, so `except Exception:` in generated code can't swallow it.
 Overhead is about 10% on pandas-heavy code and about 5x on pure-Python loops.
 
+### 2026-09-27 — Load messy real-world files
+New `services/loader.py` (`read_table`) is used by upload, Auto Analyze and
+workspace `load_file`. It handles cp1252/latin-1 CSVs (what Excel on Windows
+writes), UTF-8 BOMs, `;`/tab/`|` delimiters, and European decimal commas with `.`
+thousands separators. It also gives clear 400 errors for empty or unsupported files.
+Added `xlrd` so `.xls`, which the file picker always accepted, actually loads.
+Auto Analyze's cleaned download of an Excel upload is now named `.csv`.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

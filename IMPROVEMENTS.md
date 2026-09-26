@@ -109,6 +109,13 @@ rows, but at pandas' default 80-char width the middle columns collapsed to `...`
 `support_tickets` was hidden, so the model invented values (4, 5; the real max is
 7). The sandbox now uses a 250-char display width and up to 40 columns.
 
+### 2026-09-27 — Describe box plots and heatmap pairs to the model
+Box plots were described as a pile of 2-point line segments. They're now
+recognised by their structure and summarised as whisker span plus outlier values.
+Square labelled heatmaps (correlation matrices) name their three strongest
+off-diagonal pairs. Live: the outlier question now answers "most values between
+0 and 3, outliers at 4, 5, 6, 7", which is exactly right.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a
@@ -116,5 +123,4 @@ rows, but at pandas' default 80-char width the middle columns collapsed to `...`
 - A bare `except:` in generated code can still catch the timeout.
 - `/api/upload` reads the whole file into memory with no size limit.
 - Recommendations could offer "one-click run" instead of just filling the input.
-- Chart descriptions don't cover box plots yet (median/quartiles/outliers). The model can't read them from the image.
-- Heatmap descriptions could list the strongest off-diagonal pairs, not just the value range.
+- Box plots with several boxes are summarised as one combined span; per-box medians/quartiles would be better.

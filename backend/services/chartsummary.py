@@ -37,13 +37,7 @@ def _describe_axes(ax) -> str:
     for c in ax.containers:
         if isinstance(c, BarContainer):
             items.append(_bars(ax, c))
-    for line in ax.get_lines():
-        ys = [float(y) for y in line.get_ydata() if _is_num(y)]
-        if len(ys) > 1:
-            name = line.get_label()
-            name = "" if name.startswith("_") else f" '{name}'"
-            items.append(f"line{name}: {len(ys)} points, y from {_f(ys[0])} to {_f(ys[-1])} "
-                         f"(min {_f(min(ys))}, max {_f(max(ys))})")
+    items.extend(_lines(ax))
     for coll in ax.collections:
         if isinstance(coll, PathCollection) and len(coll.get_offsets()):
             pts = coll.get_offsets()
@@ -52,7 +46,8 @@ def _describe_axes(ax) -> str:
         elif isinstance(coll, QuadMesh):
             arr = coll.get_array()
             if arr is not None and arr.size:
-                items.append(f"heatmap: {arr.size} cells, values {_f(arr.min())} to {_f(arr.max())}")
+                items.append(f"heatmap: {arr.size} cells, values {_f(arr.min())} to {_f(arr.max())}"
+                             + _strongest_cells(ax, arr))
     for img in ax.images:
         arr = img.get_array()
         if arr is not None and arr.size:
@@ -60,6 +55,59 @@ def _describe_axes(ax) -> str:
     if not items:
         return ""
     return f"[{head or 'chart'}] " + "; ".join(i for i in items if i)
+
+
+def _lines(ax) -> list[str]:
+    """
+    Plain lines are described one by one. Box plots are drawn as many short
+    segments plus marker-only "flier" points; listing those segment by segment
+    is noise, so they're summarised as whisker span + outlier values.
+    """
+    data = [(line, _nums(line.get_xdata()), _nums(line.get_ydata())) for line in ax.get_lines()]
+    points = [d for d in data if _markers_only(d[0]) and d[1]]
+    segments = [d for d in data if not _markers_only(d[0]) and 2 <= len(d[1]) <= 5]
+    out = []
+    if len(segments) >= 4:   # box-plot structure: box outline, whiskers, caps, median
+        xs = [v for _, x, _ in segments for v in x]
+        ys = [v for _, _, y in segments for v in y]
+        vertical = (max(ys) - min(ys)) >= (max(xs) - min(xs))
+        span = ys if vertical else xs
+        desc = f"box plot: boxes and whiskers span {_f(min(span))} to {_f(max(span))}"
+        fliers = sorted({v for _, x, y in points for v in (y if vertical else x)})
+        if fliers:
+            shown = ", ".join(_f(v) for v in fliers[:15]) + (" …" if len(fliers) > 15 else "")
+            desc += f"; outlier points at {shown}"
+        out.append(desc)
+    else:
+        segments = []
+    for line, xs, ys in data:
+        if len(ys) < 2 or (line, xs, ys) in segments or (segments and _markers_only(line)):
+            continue
+        name = line.get_label()
+        name = "" if name.startswith("_") else f" '{name}'"
+        out.append(f"line{name}: {len(ys)} points, y from {_f(ys[0])} to {_f(ys[-1])} "
+                   f"(min {_f(min(ys))}, max {_f(max(ys))})")
+    return out
+
+
+def _strongest_cells(ax, arr) -> str:
+    """For a labelled square heatmap (e.g. a correlation matrix), name the strongest off-diagonal pairs."""
+    xl = [t.get_text() for t in ax.get_xticklabels()]
+    yl = [t.get_text() for t in ax.get_yticklabels()]
+    if arr.ndim != 2 or arr.shape[0] != arr.shape[1] or len(xl) != arr.shape[1] or len(yl) != arr.shape[0]:
+        return ""
+    cells = [(abs(float(arr[i, j])), float(arr[i, j]), yl[i], xl[j])
+             for i in range(arr.shape[0]) for j in range(i + 1, arr.shape[1]) if _is_num(arr[i, j])]
+    top = sorted(cells, reverse=True)[:3]
+    return "; strongest pairs: " + ", ".join(f"{a}–{b} {_f(v)}" for _, v, a, b in top) if top else ""
+
+
+def _markers_only(line) -> bool:
+    return line.get_linestyle() in ("None", "none", "", " ") and line.get_marker() not in (None, "None", "none", "")
+
+
+def _nums(values) -> list[float]:
+    return [float(v) for v in values if _is_num(v)]
 
 
 def _bars(ax, container) -> str:

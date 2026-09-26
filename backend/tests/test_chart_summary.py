@@ -62,3 +62,29 @@ def test_executor_passes_chart_data_to_the_model():
     payload = json.loads(_tool_result_for_llm(result))
     assert payload["chart"] == "rendered and shown to the user"
     assert payload["chart_data"] == ["[title 'T'] bars: a=3, b=7"]
+
+
+TICKETS = pd.Series([0] * 30 + [1] * 50 + [2] * 40 + [3] * 15 + [4] * 5 + [7])
+
+
+@pytest.mark.parametrize("draw", [
+    lambda: sns.boxplot(x=TICKETS),
+    lambda: sns.boxplot(y=TICKETS),
+    lambda: plt.boxplot(TICKETS),
+])
+def test_box_plots_report_whiskers_and_outliers(draw):
+    text = _describe(draw)
+    assert "box plot: boxes and whiskers span 0 to 3" in text
+    assert "outlier points at 4, 7" in text
+    assert "line:" not in text                   # no segment-by-segment noise
+
+
+def test_correlation_heatmap_names_strongest_pairs():
+    corr = pd.DataFrame([[1, 0.9, -0.2], [0.9, 1, 0.1], [-0.2, 0.1, 1]],
+                        index=list("abc"), columns=list("abc"))
+    text = _describe(lambda: sns.heatmap(corr))
+    assert "strongest pairs: a–b 0.9, a–c -0.2, b–c 0.1" in text
+
+
+def test_lines_with_markers_are_still_lines():
+    assert "line: 3 points" in _describe(lambda: plt.plot([1, 2, 3], [3, 1, 2], "o-"))

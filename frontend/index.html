@@ -359,6 +359,23 @@ button { cursor: pointer; }
 
 .section-title { margin: 22px 0 8px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
 
+/* Recommended next steps: rule-separated rows, same idiom as the suggestion grid */
+.recs { margin: 10px 0 4px; border-top: 1px solid var(--rule-strong); }
+.recs-note { margin-top: 2px; font-size: 13px; color: var(--ink-3); }
+.rec {
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px;
+  width: 100%; text-align: left; background: none; border: 0;
+  border-bottom: 1px solid var(--rule); padding: 9px 0;
+  transition: background .15s, padding .25s var(--ease-out);
+}
+.rec:hover { background: var(--field-tint); padding-left: 8px; }
+.rec .rec-title { font-size: 14px; font-weight: 600; }
+.rec:hover .rec-title { color: var(--field-text); }
+.rec .rec-reason { display: block; margin-top: 1px; font-size: 13px; color: var(--ink-3); }
+.rec .ic { font-size: 13px; opacity: 0; transform: translateX(-4px); transition: opacity .15s, transform .25s var(--ease-out); }
+.rec code { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
+.rec:hover .ic, .rec:focus-visible .ic { opacity: 1; transform: none; }
+
 /* Plot suggestions */
 .plot-suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
 .plot-suggest-chip {
@@ -944,6 +961,7 @@ function replayMessage(msg) {
     const turn = addAssistantTurn();
     renderAssistantContent(turn, msg.text, state.file);
     if (msg.edaProfile) renderEdaResponse(turn, msg.edaProfile, msg.filename);
+    if (msg.recs?.items?.length) renderRecommendations(turn, msg.recs.items, { stuck: msg.recs.stuck });
     return turn;
   }
 }
@@ -1268,6 +1286,11 @@ async function sendAgent(text, fileRef) {
           renderAssistantContent(turn, data.content || "", fileRef || state.file);
           state.messages.push({ role: "assistant", text: data.content || "" });
           saveCurrentChat();
+        } else if (ev === "recommendations") {
+          renderRecommendations(turn, data.items, { stuck: data.stuck });
+          // attach to the answer just saved so they come back when the chat is reopened
+          const last = state.messages[state.messages.length - 1];
+          if (last?.role === "assistant") { last.recs = { items: data.items, stuck: data.stuck }; saveCurrentChat(); }
         } else if (ev === "error") {
           appendError(turn, data.message);
         }
@@ -1410,6 +1433,10 @@ function renderEdaResponse(turn, profile, filename, fileObj) {
   `;
   turn.appendChild(readings);
 
+  if (profile.recommendations?.length) {
+    renderRecommendations(turn, profile.recommendations, { title: "Recommended next steps" });
+  }
+
   // Plot suggestions
   if (numeric.length > 0) {
     const suggestLabel = document.createElement("div");
@@ -1456,6 +1483,38 @@ function renderEdaResponse(turn, profile, filename, fileObj) {
   row.appendChild(note);
   turn.appendChild(row);
 
+  scrollBottom();
+}
+
+// Clickable next-step suggestions computed from the data (services/recommend.py).
+// `stuck` = the agent gave up, so frame them as easier questions to try instead.
+function renderRecommendations(turn, items, { title, stuck = false } = {}) {
+  const heading = document.createElement("div");
+  heading.className = "section-title";
+  heading.textContent = title || (stuck ? "Stuck? Try one of these instead" : "What to try next");
+  turn.appendChild(heading);
+  if (stuck) {
+    const note = document.createElement("div");
+    note.className = "recs-note";
+    note.textContent = "Smaller, specific questions work best with a local model.";
+    turn.appendChild(note);
+  }
+  const list = document.createElement("div");
+  list.className = "recs";
+  items.forEach(r => {
+    const btn = document.createElement("button");
+    btn.className = "rec";
+    btn.title = r.prompt;
+    btn.innerHTML = `<span><span class="rec-title">${escHtml(r.title)}</span><span class="rec-reason">${escHtml(r.reason).replace(/`([^`]+)`/g, "<code>$1</code>")}</span></span>${icon("caret-right")}`;
+    btn.addEventListener("click", () => {
+      msgInput.value = r.prompt;
+      modeSelect.value = "agent";   // recommendations are written for the agent
+      msgInput.dispatchEvent(new Event("input"));
+      msgInput.focus();
+    });
+    list.appendChild(btn);
+  });
+  turn.appendChild(list);
   scrollBottom();
 }
 

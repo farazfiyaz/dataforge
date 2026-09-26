@@ -87,6 +87,12 @@ def get_session(session_id: str) -> dict[str, Any]:
     return ns
 
 
+def peek_session_df(session_id: str | None) -> pd.DataFrame | None:
+    """The session's current `df` (as the agent has transformed it), without creating a session."""
+    df = _SESSIONS.get(session_id, {}).get("df") if session_id else None
+    return df if isinstance(df, pd.DataFrame) else None
+
+
 def reset_session(session_id: str) -> None:
     """Drop a session's namespace (e.g. when a new dataset is loaded)."""
     _SESSIONS.pop(session_id, None)

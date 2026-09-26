@@ -4,6 +4,7 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from services.eda import run_eda
 from services.datastore import put_dataset
+from services.recommend import recommend
 import pandas as pd
 import io
 import uuid
@@ -37,4 +38,5 @@ async def upload_file(file: UploadFile = File(...)):
     put_dataset(dataset_id, df)
 
     profile = run_eda(df)
+    profile["recommendations"] = recommend(df)
     return {"filename": file.filename, "profile": profile, "dataset_id": dataset_id}

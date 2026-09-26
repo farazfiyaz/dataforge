@@ -25,7 +25,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from services.llm import chat_ollama
-from services.executor import run_code, reset_session
+from services.datastore import get_dataset
+from services.executor import run_code, reset_session, peek_session_df
+from services.recommend import recommend
 from services.workspace import set_workspace, get_workspace
 
 router = APIRouter()
@@ -139,6 +141,26 @@ def _tool_result_for_llm(result: dict) -> str:
     return json.dumps(payload, default=str)
 
 
+def _recommendations_event(session_id: str, dataset_id: Optional[str],
+                           messages: list[dict], stuck: bool) -> Optional[str]:
+    """
+    Suggest what to try next, based on the data as the agent has left it
+    (the session's transformed `df`, falling back to the uploaded dataset).
+    Skips anything the user has already asked. None if there's no data.
+    """
+    df = peek_session_df(session_id)
+    if df is None and dataset_id:
+        df = get_dataset(dataset_id)
+    if df is None:
+        return None
+    asked = [m["content"] for m in messages if m.get("role") == "user"]
+    try:
+        recs = recommend(df, asked=asked, limit=3)
+    except Exception:
+        return None   # suggestions are a nice-to-have — never break the answer over them
+    return _sse("recommendations", {"items": recs, "stuck": stuck}) if recs else None
+
+
 def _save_conversation(session_id: str, messages: list[dict]) -> None:
     """Persist history, trimmed to system prompt + last MAX_HISTORY messages."""
     _CONVERSATIONS[session_id] = [messages[0]] + messages[1:][-MAX_HISTORY:]
@@ -180,6 +202,9 @@ async def agent(req: AgentRequest):
             if not tool_calls:
                 _save_conversation(session_id, messages)
                 yield _sse("final", {"content": assistant.get("content", ""), "steps": step})
+                recs = _recommendations_event(session_id, req.dataset_id, messages, stuck=False)
+                if recs:
+                    yield recs
                 return
 
             for call in tool_calls:
@@ -221,6 +246,10 @@ async def agent(req: AgentRequest):
                        "Here is what was done so far — try narrowing the question.",
             "steps": MAX_ITERATIONS,
         })
+        # The agent got stuck — offer concrete, answerable questions instead
+        recs = _recommendations_event(session_id, req.dataset_id, messages, stuck=True)
+        if recs:
+            yield recs
 
     return StreamingResponse(stream(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

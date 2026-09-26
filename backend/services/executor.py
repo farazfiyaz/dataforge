@@ -3,9 +3,13 @@
 # License: AGPL-3.0 — see LICENSE
 import sys
 import io
+import time
+import asyncio
 import base64
 import traceback
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -68,6 +72,40 @@ SAFE_GLOBALS = {
 }
 if sns is not None:
     SAFE_GLOBALS["sns"] = sns
+
+# Wall-clock budget for one run_code call. Generated code that loops forever
+# used to hang the kernel (and, run on the event loop, the whole server).
+EXEC_TIMEOUT_S = 120
+SANDBOX_FILENAME = "<sandbox>"   # compile() name — lets the tracer tell sandbox frames apart
+
+# One worker: runs are serialized (matplotlib's pyplot state and the stdout
+# swap below are process-global) but never block the async event loop.
+_EXEC_POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sandbox")
+
+
+class ExecutionTimeout(BaseException):
+    """BaseException so generated `except Exception:` blocks can't swallow it."""
+
+
+def _deadline_tracer(deadline: float, timeout: float):
+    """
+    sys.settrace hook that aborts sandbox code once past `deadline`.
+    Only frames compiled from the sandbox are line-traced, so library code
+    (pandas, numpy, sklearn) runs at full speed.
+    """
+    def local(frame, event, arg):
+        if time.monotonic() > deadline:
+            raise ExecutionTimeout(
+                f"Execution stopped after {timeout:g}s time limit. "
+                "Use vectorized pandas/numpy instead of Python loops, or work on df.sample(...)."
+            )
+        return local
+
+    def global_(frame, event, arg):
+        return local if frame.f_code.co_filename == SANDBOX_FILENAME else None
+
+    return global_
+
 
 # Persistent namespaces per session — like a notebook kernel, variables
 # survive across run_code calls so multi-step (agentic) analysis works.
@@ -138,6 +176,7 @@ def run_code(
     stdout_capture = io.StringIO()
     old_stdout = sys.stdout
     sys.stdout = stdout_capture
+    old_trace = sys.gettrace()
 
     result: dict[str, Any] = {"stdout": "", "table": None, "chart": None, "charts": None, "error": None}
 
@@ -145,7 +184,12 @@ def run_code(
 
     try:
         plt.close("all")   # drop any figures left over from a previous run — keeps memory flat across a long session
-        exec(code, {**SAFE_GLOBALS, **local_ns}, local_ns)  # noqa: S102
+        compiled = compile(code, SANDBOX_FILENAME, "exec")
+        sys.settrace(_deadline_tracer(time.monotonic() + EXEC_TIMEOUT_S, EXEC_TIMEOUT_S))
+        try:
+            exec(compiled, {**SAFE_GLOBALS, **local_ns}, local_ns)  # noqa: S102
+        finally:
+            sys.settrace(old_trace)
 
         result["stdout"] = stdout_capture.getvalue()
 
@@ -176,9 +220,19 @@ def run_code(
             result["charts"] = charts
             result["chart"] = charts[0]   # back-compat: first chart for older consumers
 
+    except ExecutionTimeout as e:
+        result["stdout"] = stdout_capture.getvalue()
+        result["error"] = f"ExecutionTimeout: {e}"
+        plt.close("all")
     except Exception:
         result["error"] = traceback.format_exc()
     finally:
         sys.stdout = old_stdout
 
     return result
+
+
+async def run_code_async(code: str, csv_data: str = "", **kwargs) -> dict[str, Any]:
+    """run_code on the sandbox worker thread, so the server stays responsive meanwhile."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(_EXEC_POOL, partial(run_code, code, csv_data, **kwargs))

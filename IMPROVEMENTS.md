@@ -46,9 +46,19 @@ models skip IDs (models only when features aren't chosen explicitly, and the
 dropped IDs are reported). "Line chart over time" is only suggested when a date
 column exists. ID/date detection now lives in `services/eda.py`, shared with recommendations.
 
+### 2026-09-27 — Sandbox time limit and non-blocking execution
+`run_code` ran synchronously inside the async handlers, so the whole server
+froze while agent code ran, and a `while True:` from the model hung DataForge
+until restart. Sandbox code now runs on a dedicated worker thread (serialized,
+since pyplot and the stdout swap are global), and a trace hook limited to
+sandbox-compiled frames stops it after `EXEC_TIMEOUT_S` (120s). The exception
+is a BaseException, so `except Exception:` in generated code can't swallow it.
+Overhead is about 10% on pandas-heavy code and about 5x on pure-Python loops.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
-  escapes, and there is no execution timeout; an infinite loop hangs the kernel.
-  Consider running code in a subprocess with a timeout.
+  escapes. Real isolation needs a subprocess kernel (which would also allow a
+  hard memory limit and stopping long C-level operations).
+- A bare `except:` in generated code can still catch the timeout.
 - `/api/upload` reads the whole file into memory with no size limit.
 - Recommendations could offer "one-click run" instead of just filling the input.

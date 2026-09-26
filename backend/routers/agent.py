@@ -26,7 +26,7 @@ from pydantic import BaseModel
 
 from services.llm import chat_ollama
 from services.datastore import get_dataset
-from services.executor import run_code, reset_session, peek_session_df
+from services.executor import run_code_async, reset_session, peek_session_df
 from services.recommend import recommend
 from services.workspace import set_workspace, get_workspace
 
@@ -55,6 +55,7 @@ TOOLS = [
                 "You may also import: scipy, sklearn, plotly, math, statistics, "
                 "datetime, re, json, itertools, collections. "
                 "Variables PERSIST between calls, like a notebook. "
+                "Each call is stopped after a 2-minute time limit, so prefer vectorized code. "
                 "Use print() to see values. Returns stdout, an optional table, and any error."
             ),
             "parameters": {
@@ -223,8 +224,8 @@ async def agent(req: AgentRequest):
 
                 yield _sse("code", {"step": step, "code": code})
 
-                result = run_code(code, req.csv_data, session_id=session_id,
-                                  dataset_id=req.dataset_id)
+                result = await run_code_async(code, req.csv_data, session_id=session_id,
+                                              dataset_id=req.dataset_id)
 
                 # Stream the human-facing result (full chart, full table)
                 yield _sse("result", {

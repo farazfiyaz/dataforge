@@ -126,6 +126,7 @@ class AgentRequest(BaseModel):
 
 _TOOL_CALL_TAG = re.compile(r"<tool_call>\s*(.*?)\s*(?:</tool_call>|$)", re.DOTALL)
 _FENCE = re.compile(r"```([\w+-]*)[ \t]*\n?(.*?)```", re.DOTALL)
+_INLINE_CALL = re.compile(r'\{\s*"name"\s*:')
 # "Please run the above code…": the model handing work back instead of doing it
 _HANDOFF = re.compile(
     r"\b(run|execute)\b[^.\n]{0,40}\b(code|snippet|script|above|below|following)\b"
@@ -178,7 +179,18 @@ def _text_tool_calls(content: str, allow_code_blocks: bool = False) -> list[dict
     calls = [c for _, body in fences for c in (_as_call(body) or [])]
     if calls:
         return calls
-    if text.startswith("{") and (calls := _as_call(text)) is not None:
+    if text.startswith("{") and (whole := _as_call(text)) is not None:
+        return whole
+    # A call object with prose before or after it: decode just that object
+    decoder = json.JSONDecoder(strict=False)
+    for m in _INLINE_CALL.finditer(text):
+        try:
+            obj, _ = decoder.raw_decode(text, m.start())
+        except json.JSONDecodeError:
+            continue
+        if (found := _as_call(json.dumps(obj))) is not None:
+            calls.extend(found)
+    if calls:
         return calls
     if allow_code_blocks or _HANDOFF.search(text):
         code = "\n\n".join(body.strip() for lang, body in fences if lang.lower() in ("python", "py"))
@@ -239,6 +251,11 @@ def _tool_result_for_llm(result: dict) -> str:
     if result.get("charts"):
         n = len(result["charts"])
         payload["chart"] = f"{n} chart(s) rendered and shown to the user" if n != 1 else "rendered and shown to the user"
+        # what's actually plotted, since the model can't see the image; lets it
+        # say "basic is highest (0.58)" instead of "the tallest bar"
+        described = [s for s in result.get("chart_summaries") or [] if s]
+        if described:
+            payload["chart_data"] = described
     return json.dumps(payload, default=str)
 
 

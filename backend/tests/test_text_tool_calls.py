@@ -185,3 +185,12 @@ def test_handoff_replies_become_calls_even_after_code_ran(content):
 ])
 def test_final_answers_with_example_code_are_not_rerun(content):
     assert _text_tool_calls(content) == []
+
+
+@pytest.mark.parametrize("content", [
+    # seen from qwen2.5-coder:7b: the call, then an explanation
+    json.dumps(CALL) + "\n\nTo interpret the bar chart:\n- The x-axis represents the plans.",
+    "Let me compute that. " + json.dumps(CALL) + " Then I'll summarise.",
+])
+def test_call_object_with_surrounding_prose(content):
+    assert _text_tool_calls(content) == [{"function": {"name": "run_python", "arguments": {"code": CODE}}}]

@@ -18,6 +18,7 @@ matplotlib.use("Agg")   # non-interactive backend — must be set before pyplot 
 import matplotlib.pyplot as plt
 from typing import Any
 
+from services.chartsummary import describe_figure
 from services.datastore import get_dataset
 from services.ml import train_model
 from services.workspace import list_files, load_file
@@ -214,7 +215,7 @@ def run_code(
         # Encode EVERY figure the code drew, not just the last one — code that
         # plots more than once per run (e.g. train_model's diagnostics figure
         # followed by an extra chart) used to lose all but the final figure.
-        charts = []
+        charts, summaries = [], []
         for num in plt.get_fignums():
             fig = plt.figure(num)
             if not fig.get_axes():
@@ -223,10 +224,15 @@ def run_code(
             fig.savefig(buf, format="png", bbox_inches="tight")
             buf.seek(0)
             charts.append(base64.b64encode(buf.read()).decode())
+            try:
+                summaries.append(describe_figure(fig))   # after savefig: tick labels exist now
+            except Exception:
+                summaries.append("")
         plt.close("all")
 
         if charts:
             result["charts"] = charts
+            result["chart_summaries"] = summaries
             result["chart"] = charts[0]   # back-compat: first chart for older consumers
 
     except ExecutionTimeout as e:

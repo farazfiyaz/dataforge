@@ -94,6 +94,15 @@ Also tightened ID detection: an unnamed column now needs to be an exact +1 row
 counter, since a sorted unique feature was being dropped as an "ID".
 Live: "churn rate per plan" answered 57.69/41.41/44.22%, matching pandas exactly.
 
+### 2026-09-27 — Describe charts to the model
+The agent can't see the PNGs it draws; it was only told "chart rendered", so a
+live run answered "the plan with the highest churn rate is the one with the
+highest bar". `services/chartsummary.py` reads the plotted data back out of each
+figure (bar labels and heights, histogram peak, line/scatter ranges, heatmap
+range) and passes it to the model as `chart_data`. The same question now answers
+"basic, 57.7% (pro 44.2%, enterprise 41.4%)", matching pandas exactly. Also
+recovers a call object that has prose before or after it.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

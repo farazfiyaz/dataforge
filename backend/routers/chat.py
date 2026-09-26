@@ -3,7 +3,7 @@
 # License: AGPL-3.0 — see LICENSE
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from services.llm import call_ollama
+from services.llm import OllamaError, call_ollama
 from typing import Optional
 
 router = APIRouter()
@@ -21,6 +21,8 @@ async def chat(req: ChatRequest):
     system_prompt = build_system_prompt(req.mode, req.context)
     try:
         response = await call_ollama(system_prompt, req.message)
+    except OllamaError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Ollama error: {e}")
     return {"response": response}

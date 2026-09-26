@@ -24,7 +24,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from services.llm import chat_ollama
+from services.llm import OllamaError, chat_ollama
 from services.datastore import get_dataset
 from services.executor import run_code_async, reset_session, peek_session_df
 from services.recommend import recommend
@@ -192,6 +192,9 @@ async def agent(req: AgentRequest):
         for step in range(1, MAX_ITERATIONS + 1):
             try:
                 assistant = await chat_ollama(messages, tools=TOOLS)
+            except OllamaError as e:          # already says what to do about it
+                yield _sse("error", {"message": str(e)})
+                return
             except Exception as e:
                 yield _sse("error", {"message": f"Ollama error: {e}"})
                 return

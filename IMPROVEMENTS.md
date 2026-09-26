@@ -67,6 +67,13 @@ Auto Analyze's cleaned download of an Excel upload is now named `.csv`.
 GitHub Actions runs the backend suite on Python 3.11 + pandas 2.2 and on
 Python 3.13 + pandas 3, and syntax-checks the frontend's inline script.
 
+### 2026-09-27 — Actionable Ollama errors; proper chat roles for Explain/Code/Plot
+Ollama failures now say what to do: "Start it with `ollama serve`", "Run
+`ollama pull <model>`", or that the model is still loading. They used to show raw
+exceptions like "All connection attempts failed". Explain/Code/Plot modes now use
+`/api/chat` with real system/user roles. The old `/api/generate` call hand-wrote
+`<|system|>` tags that Qwen doesn't use, so the system prompt arrived as user text.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

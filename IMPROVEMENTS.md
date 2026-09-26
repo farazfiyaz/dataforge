@@ -63,6 +63,10 @@ thousands separators. It also gives clear 400 errors for empty or unsupported fi
 Added `xlrd` so `.xls`, which the file picker always accepted, actually loads.
 Auto Analyze's cleaned download of an Excel upload is now named `.csv`.
 
+### 2026-09-27 — CI on every PR
+GitHub Actions runs the backend suite on Python 3.11 + pandas 2.2 and on
+Python 3.13 + pandas 3, and syntax-checks the frontend's inline script.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

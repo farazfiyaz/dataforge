@@ -11,11 +11,12 @@ Each recommendation carries a ready-to-send `prompt` for the agent.
 """
 
 import re
-import warnings
 from typing import Any
 
 import numpy as np
 import pandas as pd
+
+from services.eda import find_date_column, is_id_column
 
 # Column names that usually mean "this is what you'd want to predict"
 _TARGET_HINTS = re.compile(
@@ -23,8 +24,6 @@ _TARGET_HINTS = re.compile(
     r"converted|conversion|attrition|response|y)$|^(is|has)_",
     re.IGNORECASE,
 )
-_ID_HINTS = re.compile(r"(^|_)(id|uuid|key|index)$", re.IGNORECASE)
-_DATE_HINTS = re.compile(r"date|time|month|year|day|_at$|timestamp", re.IGNORECASE)
 _YES_NO = {"0", "1", "0.0", "1.0", "yes", "no", "y", "n", "true", "false", "t", "f"}
 
 MISSING_PCT_THRESHOLD = 5.0      # flag columns with more missing values than this
@@ -56,7 +55,7 @@ def _all_recommendations(df: pd.DataFrame) -> list[dict[str, Any]]:
 
     recs: list[dict[str, Any]] = []
     rows = len(df)
-    id_cols = [c for c in df.columns if _is_id_column(df[c], c)]
+    id_cols = [c for c in df.columns if is_id_column(df[c], c)]
     numeric = [c for c in df.select_dtypes(include="number").columns if c not in id_cols]
     target = _find_target(df, exclude=id_cols)
     categoricals = [
@@ -64,7 +63,7 @@ def _all_recommendations(df: pd.DataFrame) -> list[dict[str, Any]]:
         if c not in id_cols and c != target and not pd.api.types.is_numeric_dtype(df[c])
         and 2 <= df[c].nunique() <= 12
     ]
-    date_col = _find_date_column(df)
+    date_col = find_date_column(df)
     exclude_note = f" Exclude {_names(id_cols)} — it's an identifier." if id_cols else ""
 
     # ── Predict the likely target ──
@@ -167,15 +166,6 @@ def _names(cols: list) -> str:
     return quoted[0] if len(quoted) == 1 else ", ".join(quoted[:-1]) + " and " + quoted[-1]
 
 
-def _is_id_column(s: pd.Series, name) -> bool:
-    n = len(s)
-    if n < 2 or s.nunique() < 0.95 * n:
-        return False
-    if _ID_HINTS.search(str(name)):
-        return True
-    return bool(pd.api.types.is_integer_dtype(s) and s.is_monotonic_increasing and s.nunique() == n)
-
-
 def _find_target(df: pd.DataFrame, exclude: list) -> str | None:
     candidates = [c for c in df.columns if c not in exclude and 2 <= df[c].nunique() <= 10]
     for c in candidates:              # a name that says "target" wins
@@ -186,24 +176,6 @@ def _find_target(df: pd.DataFrame, exclude: list) -> str | None:
     binary = [c for c in candidates
               if df[c].nunique() == 2 and {str(v).strip().lower() for v in df[c].dropna().unique()} <= _YES_NO]
     return binary[-1] if binary else None   # outcome columns tend to come last
-
-
-def _find_date_column(df: pd.DataFrame) -> str | None:
-    for c in df.columns:
-        if pd.api.types.is_datetime64_any_dtype(df[c]):
-            return c
-    for c in df.columns:
-        # object (pandas 2) or str (pandas 3) columns named like dates
-        if (df[c].dtype == object or pd.api.types.is_string_dtype(df[c])) and _DATE_HINTS.search(str(c)):
-            sample = df[c].dropna().astype(str).head(50)
-            if sample.empty:
-                continue
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                parsed = pd.to_datetime(sample, errors="coerce")
-            if parsed.notna().mean() > 0.8:
-                return c
-    return None
 
 
 def _strongest_correlation(df: pd.DataFrame, numeric: list) -> tuple[str, str, float] | None:

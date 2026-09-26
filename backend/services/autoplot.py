@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
 from services.cleaner import text_columns
+from services.eda import is_id_column
 
 DARK   = "#0f1117"
 SURF   = "#1a1d27"
@@ -31,6 +32,11 @@ ACCENT2= "#00d4aa"
 TEXT   = "#e4e6f0"
 MUTED  = "#6b7094"
 DANGER = "#ff6b6b"
+
+def _numeric_columns(df: pd.DataFrame, limit: int) -> list:
+    """Numeric columns worth charting — identifiers like customer_id are just a flat line."""
+    return [c for c in df.select_dtypes(include="number").columns if not is_id_column(df[c], c)][:limit]
+
 
 def _fig_to_b64(fig) -> str:
     buf = io.BytesIO()
@@ -78,7 +84,7 @@ def plot_missing(df_original: pd.DataFrame) -> dict | None:
 
 def plot_histograms(df: pd.DataFrame) -> dict | None:
     """Grid of histograms for numeric columns."""
-    num_cols = df.select_dtypes(include="number").columns.tolist()[:12]
+    num_cols = _numeric_columns(df, 12)
     if not num_cols:
         return None
 
@@ -112,7 +118,7 @@ def plot_histograms(df: pd.DataFrame) -> dict | None:
 
 def plot_correlation(df: pd.DataFrame) -> dict | None:
     """Correlation heatmap for numeric columns."""
-    num_cols = df.select_dtypes(include="number").columns.tolist()[:20]
+    num_cols = _numeric_columns(df, 20)
     if len(num_cols) < 2:
         return None
 
@@ -173,7 +179,7 @@ def plot_categoricals(df: pd.DataFrame) -> list[dict]:
 
 def plot_boxplots(df: pd.DataFrame) -> dict | None:
     """Box plots for numeric columns."""
-    num_cols = df.select_dtypes(include="number").columns.tolist()[:12]
+    num_cols = _numeric_columns(df, 12)
     if not num_cols:
         return None
 

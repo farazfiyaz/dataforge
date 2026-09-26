@@ -1438,13 +1438,13 @@ function renderEdaResponse(turn, profile, filename, fileObj) {
   }
 
   // Plot suggestions
-  if (numeric.length > 0) {
+  const suggestions = buildPlotSuggestions(numeric, categ, profile.date_column);
+  if (suggestions.length > 0) {
     const suggestLabel = document.createElement("div");
     suggestLabel.className = "section-title";
     suggestLabel.textContent = "Suggested charts";
     turn.appendChild(suggestLabel);
 
-    const suggestions = buildPlotSuggestions(numeric, categ);
     const chips = document.createElement("div");
     chips.className = "plot-suggestions";
     suggestions.forEach(s => {
@@ -1518,17 +1518,18 @@ function renderRecommendations(turn, items, { title, stuck = false } = {}) {
   scrollBottom();
 }
 
-function buildPlotSuggestions(numeric, categ) {
+function buildPlotSuggestions(numeric, categ, dateCol) {
   const suggestions = [];
-  const numNames = numeric.map(c => c.name);
-  const catNames = categ.map(c => c.name);
+  // identifiers (customer_id, row counters) make meaningless charts
+  const numNames = numeric.filter(c => !c.is_id).map(c => c.name);
+  const catNames = categ.filter(c => !c.is_id).map(c => c.name);
 
   if (numNames.length >= 1) suggestions.push(`Plot histogram of ${numNames[0]}`);
   if (numNames.length >= 2) suggestions.push(`Scatter plot of ${numNames[0]} vs ${numNames[1]}`);
   if (numNames.length >= 2) suggestions.push(`Correlation heatmap of all numeric columns`);
   if (numNames.length >= 1) suggestions.push(`Box plot of ${numNames[0]} to find outliers`);
   if (catNames.length >= 1) suggestions.push(`Bar chart of top values in ${catNames[0]}`);
-  if (numNames.length >= 1) suggestions.push(`Line chart of ${numNames[0]} over time`);
+  if (dateCol && numNames.length >= 1) suggestions.push(`Line chart of ${numNames[0]} over ${dateCol}`);
   if (numNames.length >= 2) suggestions.push(`Distribution comparison: ${numNames[0]} vs ${numNames[1]}`);
 
   return suggestions.slice(0, 6);

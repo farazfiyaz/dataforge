@@ -38,11 +38,17 @@ The venv resolves `pandas>=2.2` to pandas 3, which broke two things silently:
 Also made text-column selection work on both pandas versions, and stopped whitespace
 stripping from turning missing values into the literal text `"nan"`.
 
+### 2026-09-27 — Keep ID columns out of charts and models
+`customer_id`-style columns were suggested as charts ("histogram of customer_id"),
+drawn in Auto Analyze histograms/box plots/heatmaps, and fed to `train_model` as
+features. The profile now flags `is_id` per column and a `date_column`. Charts and
+models skip IDs (models only when features aren't chosen explicitly, and the
+dropped IDs are reported). "Line chart over time" is only suggested when a date
+column exists. ID/date detection now lives in `services/eda.py`, shared with recommendations.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes, and there is no execution timeout; an infinite loop hangs the kernel.
   Consider running code in a subprocess with a timeout.
 - `/api/upload` reads the whole file into memory with no size limit.
-- "Suggested charts" chips offer to plot ID columns (e.g. histogram of `customer_id`).
 - Recommendations could offer "one-click run" instead of just filling the input.
-- `train_model` uses ID columns (e.g. `customer_id`) as features; they should be auto-dropped.

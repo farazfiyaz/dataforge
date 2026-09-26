@@ -33,6 +33,8 @@ from sklearn.metrics import (
     confusion_matrix, r2_score, mean_absolute_error, mean_squared_error,
 )
 
+from services.eda import is_id_column
+
 MAX_ONEHOT_CARDINALITY = 20   # categorical columns with more uniques get dropped
 MAX_FEATURE_BARS = 15         # top-N features shown in the importance chart
 
@@ -77,11 +79,15 @@ def train_model(df: pd.DataFrame, target: str, task: str = None,
 
     # ── feature selection ──
     X = data[features] if features else data.drop(columns=[target])
+    # identifiers look like strong features (they're unique per row) but only
+    # memorize rows — leave them out unless the caller asked for them
+    id_cols = [] if features else [c for c in X.columns if is_id_column(X[c], c)]
+    X = X.drop(columns=id_cols)
     X = X.select_dtypes(exclude=["datetime64[ns]", "datetime64[ns, UTC]"])
     num_cols = X.select_dtypes(include="number").columns.tolist()
     cat_cols = [c for c in X.select_dtypes(include=["object", "string", "category", "bool"]).columns
                 if X[c].nunique() <= MAX_ONEHOT_CARDINALITY]
-    dropped = [c for c in X.columns if c not in num_cols + cat_cols]
+    dropped = id_cols + [c for c in X.columns if c not in num_cols + cat_cols]
     X = X[num_cols + cat_cols]
     if X.empty:
         raise ValueError("no usable feature columns found")

@@ -16,6 +16,7 @@ watch the agent work in real time.
 """
 
 import json
+import re
 import uuid
 from collections import OrderedDict
 from typing import Optional
@@ -123,6 +124,105 @@ class AgentRequest(BaseModel):
     session_id: Optional[str] = None
 
 
+_TOOL_CALL_TAG = re.compile(r"<tool_call>\s*(.*?)\s*(?:</tool_call>|$)", re.DOTALL)
+_FENCE = re.compile(r"```([\w+-]*)[ \t]*\n?(.*?)```", re.DOTALL)
+# "Please run the above code…": the model handing work back instead of doing it
+_HANDOFF = re.compile(
+    r"\b(run|execute)\b[^.\n]{0,40}\b(code|snippet|script|above|below|following)\b"
+    r"|\byou (can|could|should) (run|execute)\b",
+    re.IGNORECASE,
+)
+
+
+def _as_call(raw: str) -> list[dict] | None:
+    """Parse `raw` as one or more call-shaped objects ({"name", "arguments"}), else None."""
+    try:
+        obj = json.loads(raw.strip(), strict=False)   # strict=False: raw newlines inside code strings
+    except json.JSONDecodeError:
+        return None
+    calls = []
+    for item in obj if isinstance(obj, list) else [obj]:
+        if not (isinstance(item, dict) and isinstance(item.get("name"), str)
+                and ("arguments" in item or "parameters" in item)):
+            return None
+        args = item.get("arguments", item.get("parameters"))
+        calls.append({"function": {"name": item["name"], "arguments": args}})
+    return calls
+
+
+def _text_tool_calls(content: str, allow_code_blocks: bool = False) -> list[dict]:
+    """
+    Recover tool calls a model wrote as text instead of native `tool_calls`.
+
+    qwen2.5-coder:7b (the default model) never emits native tool calls through
+    Ollama. It writes `{"name": "run_python", "arguments": {...}}` as content:
+    bare, in <tool_call> tags, or in a ```json/```python fence, often after a
+    sentence of preamble. Taken literally, the agent would show that JSON as its
+    "final answer" and never run anything.
+
+    - Call-shaped JSON (with "name" AND "arguments") is recognised in tags, in
+      any fenced block, or as the whole reply. Unknown names are kept; the loop
+      translates helpers (train_model…) or answers with a corrective error.
+    - Plain ```python blocks become a call when the model clearly meant them
+      to run: nothing has run yet this request (`allow_code_blocks`), or the
+      reply hands them to the user ("please run the above code"). Otherwise
+      they're examples inside a final answer and are left alone.
+    """
+    text = (content or "").strip()
+    if not text:
+        return []
+    calls = [c for raw in _TOOL_CALL_TAG.findall(text) for c in (_as_call(raw) or [])]
+    if calls:
+        return calls
+    fences = _FENCE.findall(text)
+    calls = [c for _, body in fences for c in (_as_call(body) or [])]
+    if calls:
+        return calls
+    if text.startswith("{") and (calls := _as_call(text)) is not None:
+        return calls
+    if allow_code_blocks or _HANDOFF.search(text):
+        code = "\n\n".join(body.strip() for lang, body in fences if lang.lower() in ("python", "py"))
+        if code:
+            return [{"function": {"name": "run_python", "arguments": {"code": code}}}]
+    return []
+
+
+def _normalize_calls(calls: list[dict]) -> list[dict]:
+    """Decode string arguments and turn helper "tools" into run_python calls."""
+    out = []
+    for call in calls:
+        fn = call.get("function", {})
+        name, args = fn.get("name"), fn.get("arguments") or {}
+        if isinstance(args, str):          # some models return JSON strings
+            try:
+                args = json.loads(args, strict=False)
+            except json.JSONDecodeError:
+                args = {"code": args}
+        if name != "run_python" and (code := _helper_call_as_code(name, args)):
+            name, args = "run_python", {"code": code}
+        out.append({"function": {"name": name, "arguments": args}})
+    return out
+
+
+# Sandbox helpers that models "call" as if they were tools. Rather than bounce
+# the call back (small models often just repeat it), run the equivalent code.
+def _helper_call_as_code(name: str, args: dict) -> str | None:
+    if not isinstance(args, dict):
+        return None
+    args = dict(args)
+    if name == "train_model":
+        data = args.pop("df", "df")
+        data = data if isinstance(data, str) and data.strip() else "df"   # may be an expression, e.g. df.drop(...)
+        kwargs = ", ".join(f"{k}={v!r}" for k, v in args.items())
+        return f"model = train_model({data}{', ' + kwargs if kwargs else ''})"
+    if name == "list_files":
+        return f"print(list_files({args.get('subdir', '')!r}))"
+    if name == "load_file":
+        target = args.get("relpath") or args.get("name") or args.get("path") or args.get("filename")
+        return f"df2 = load_file({target!r})\nprint(df2.shape)\nprint(df2.head())" if target else None
+    return None
+
+
 def _sse(event: str, data: dict) -> str:
     """Format one Server-Sent Event."""
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
@@ -189,6 +289,7 @@ async def agent(req: AgentRequest):
     async def stream():
         yield _sse("start", {"session_id": session_id})
 
+        ran_code = False   # until something runs, ```python blocks are code to run, not examples
         for step in range(1, MAX_ITERATIONS + 1):
             try:
                 assistant = await chat_ollama(messages, tools=TOOLS)
@@ -199,8 +300,12 @@ async def agent(req: AgentRequest):
                 yield _sse("error", {"message": f"Ollama error: {e}"})
                 return
 
+            tool_calls = assistant.get("tool_calls") or                 _text_tool_calls(assistant.get("content", ""), allow_code_blocks=not ran_code)
+            if tool_calls:
+                # store the normalized call so the model's history shows correct usage
+                tool_calls = _normalize_calls(tool_calls)
+                assistant = {"role": "assistant", "content": "", "tool_calls": tool_calls}
             messages.append(assistant)
-            tool_calls = assistant.get("tool_calls") or []
 
             # No tool call → model is done; its content is the final answer
             if not tool_calls:
@@ -214,16 +319,19 @@ async def agent(req: AgentRequest):
             for call in tool_calls:
                 fn = call.get("function", {})
                 if fn.get("name") != "run_python":
-                    messages.append({"role": "tool", "content": json.dumps({"error": "unknown tool"})})
+                    # tell the model how to fix it — small models retry sensibly
+                    # when told what to do, but loop on a bare "unknown tool"
+                    messages.append({"role": "tool", "content": json.dumps({"error": (
+                        f"There is no tool named '{fn.get('name')}'. The only tool is run_python: "
+                        "put Python code in its `code` argument. Helpers such as train_model, "
+                        "list_files and load_file are functions you call inside that code, e.g. "
+                        "run_python(code=\"model = train_model(df, target='churn')\")."
+                    )})})
                     continue
 
                 args = fn.get("arguments") or {}
-                if isinstance(args, str):          # some models return JSON strings
-                    try:
-                        args = json.loads(args)
-                    except json.JSONDecodeError:
-                        args = {"code": args}
-                code = args.get("code", "")
+                code = args.get("code", "") if isinstance(args, dict) else str(args)
+                ran_code = True
 
                 yield _sse("code", {"step": step, "code": code})
 

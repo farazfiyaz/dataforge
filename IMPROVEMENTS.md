@@ -74,6 +74,16 @@ exceptions like "All connection attempts failed". Explain/Code/Plot modes now us
 `/api/chat` with real system/user roles. The old `/api/generate` call hand-wrote
 `<|system|>` tags that Qwen doesn't use, so the system prompt arrived as user text.
 
+### 2026-09-27 — Make the agent work with qwen2.5-coder (text tool calls)
+Tested live: `qwen2.5-coder:7b`, the default model, never emits native tool calls
+through Ollama (0 of 4 probes). It writes calls as text, so the agent showed raw
+JSON as its "final answer" and ran nothing. The agent now recovers:
+- call JSON that's bare, in `<tool_call>` tags, or in any fenced block (even after prose);
+- helpers "called" as tools (`train_model`, `list_files`, `load_file`), translated to code;
+- ```python blocks when nothing has run yet, or when the reply says "please run the above code".
+Unknown tools get a corrective message instead of a bare "unknown tool".
+Live result: "Predict churn" now trains the model and answers with real metrics.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a
@@ -81,3 +91,5 @@ exceptions like "All connection attempts failed". Explain/Code/Plot modes now us
 - A bare `except:` in generated code can still catch the timeout.
 - `/api/upload` reads the whole file into memory with no size limit.
 - Recommendations could offer "one-click run" instead of just filling the input.
+- Sandbox should echo the last expression like a notebook (`df.head()` alone prints nothing).
+- `train_model` should print top feature importances; right now the model can only guess them from a chart it cannot see.

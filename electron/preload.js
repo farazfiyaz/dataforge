@@ -16,6 +16,12 @@ contextBridge.exposeInMainWorld("dataforge", {
   // Platform info (useful for UI tweaks)
   platform: process.platform,
 
+  // Fires with {state: "checking"|"pulling"|"ready"|"error", model, detail?}
+  // as the main process makes sure the local LLM is downloaded and warmed up.
+  onModelStatus: (callback) => {
+    ipcRenderer.on("df:model-status", (_event, status) => callback(status));
+  },
+
   // Future: add IPC calls here as the app grows
   // e.g. openFilePicker: () => ipcRenderer.invoke("open-file-picker"),
 });

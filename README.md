@@ -20,6 +20,8 @@ Copyright © 2026 Mohammed Farazuddin · [farazfiyaz2@gmail.com](mailto:farazfiy
 
 **🔒 Fully local** — FastAPI backend + Ollama LLM + Electron desktop shell. No cloud, no API keys, no data leaving your machine.
 
+**💻 Adapts to your hardware** — on first launch, DataForge checks how much RAM the machine has and picks a matching `qwen2.5-coder` size (1.5B / 3B / 7B), downloading it automatically if it isn't installed yet. No manual config needed to run on a low-spec laptop vs. a workstation.
+
 ## Architecture
 
 ```
@@ -31,7 +33,7 @@ Electron shell
         ├── /api/chat        → single-shot explain/code/plot modes
         ├── /api/execute     → sandboxed code execution (persistent notebook-style kernel)
         └── /api/autoanalyze → auto-clean + auto-plot
-            └── Ollama (qwen2.5-coder:7b) — local LLM with native tool calling
+            └── Ollama (qwen2.5-coder:1.5b/3b/7b, picked by available RAM) — local LLM with native tool calling
 ```
 
 ## Quick start
@@ -39,11 +41,12 @@ Electron shell
 Prerequisites: [Python 3.10+](https://python.org), [Node.js](https://nodejs.org), [Ollama](https://ollama.com)
 
 ```bash
-ollama pull qwen2.5-coder:7b
 git clone https://github.com/farazfiyaz/dataforge.git
 cd dataforge
 start.bat          # Windows — installs deps on first run, launches the app
 ```
+
+DataForge picks a `qwen2.5-coder` size based on the machine's RAM (≥12GB → 7B, ≥6GB → 3B, else 1.5B) and pulls it automatically on first launch if it isn't already installed — no manual `ollama pull` needed. To pre-download it yourself instead (e.g. on a slow connection), run `ollama pull qwen2.5-coder:7b` (or `:3b` / `:1.5b`) before starting the app.
 
 ## License
 

@@ -2,11 +2,15 @@
 # Copyright (C) 2026 Mohammed Farazuddin <farazfiyaz2@gmail.com>
 # License: AGPL-3.0 — see LICENSE
 import json
+import os
 import httpx
 
 OLLAMA_URL      = "http://localhost:11434/api/generate"
 OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
-DEFAULT_MODEL   = "qwen2.5-coder:7b"
+# Electron picks the model size that fits the machine's RAM (see electron/main.js
+# pickModel()) and passes it in via this env var; falls back to the 7B model when
+# run outside Electron (e.g. `python app.py` directly).
+DEFAULT_MODEL   = os.environ.get("DATAFORGE_MODEL", "qwen2.5-coder:7b")
 
 
 async def call_ollama(system_prompt: str, user_message: str) -> str:

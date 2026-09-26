@@ -17,6 +17,7 @@ watch the agent work in real time.
 
 import json
 import uuid
+from collections import OrderedDict
 from typing import Optional
 
 from fastapi import APIRouter
@@ -25,16 +26,18 @@ from pydantic import BaseModel
 
 from services.llm import chat_ollama
 from services.executor import run_code, reset_session
+from services.workspace import set_workspace, get_workspace
 
 router = APIRouter()
 
 MAX_ITERATIONS = 10
 MAX_HISTORY = 40   # messages kept per conversation (excluding system prompt)
+MAX_CONVERSATIONS = 20   # bounded like services/executor.py's session cache — caps memory on long-running low-RAM machines
 
 # Conversation history per session — this is what makes follow-ups like
 # "that's wrong, fix it" or "make the bars horizontal" actually work:
 # the model sees everything it did before, and the kernel still has its variables.
-_CONVERSATIONS: dict[str, list[dict]] = {}
+_CONVERSATIONS: "OrderedDict[str, list[dict]]" = OrderedDict()
 
 # Tool schema the model sees (Ollama / OpenAI style)
 TOOLS = [
@@ -45,7 +48,9 @@ TOOLS = [
             "description": (
                 "Execute Python code against the loaded dataset. "
                 "Available: `df` (pandas DataFrame), `pd`, `np` (numpy), `plt` (matplotlib), "
-                "`sns` (seaborn). You may also import: scipy, sklearn, plotly, math, statistics, "
+                "`sns` (seaborn), `train_model` (one-call ML pipeline with metrics + charts), "
+                "`list_files()` / `load_file(name)` (browse and load files from the user's workspace folder). "
+                "You may also import: scipy, sklearn, plotly, math, statistics, "
                 "datetime, re, json, itertools, collections. "
                 "Variables PERSIST between calls, like a notebook. "
                 "Use print() to see values. Returns stdout, an optional table, and any error."
@@ -77,6 +82,22 @@ Work step by step like a data scientist in a notebook:
 Plotting — any chart type is fine (matplotlib `plt`, seaborn `sns`, numpy `np`):
 - Always plt.style.use('dark_background'); add titles and axis labels.
 - Heatmaps, boxplots, violin plots, pairplots, regression plots — use seaborn when it's cleaner.
+
+Machine learning — a `train_model` helper is preloaded:
+    model = train_model(df, target="churn")              # auto-detects classification/regression
+    model = train_model(df, target="price", model="gb")  # "rf" (default) | "gb" | "linear"
+It handles preprocessing (impute/encode/scale), train/test split, prints metrics
+(accuracy/F1/ROC AUC or R²/MAE/RMSE), and draws confusion matrix / ROC / feature
+importance charts automatically. It returns a fitted sklearn Pipeline — reuse it
+in later steps for .predict() on new data. Use it whenever the user asks to train,
+predict, or model something; interpret the metrics in plain English in your answer.
+
+Workspace files — if the user has set a workspace folder, you can browse it yourself:
+    list_files()                      # what's in the folder (csv/xlsx/json/parquet/tsv)
+    df2 = load_file("sales.csv")      # load any file as a DataFrame
+Use these when the user mentions files by name, asks what data is available, or wants
+to combine multiple files. If they raise "No workspace folder is set", tell the user
+to set one with the 📁 Workspace button.
 
 Big datasets — be memory- and output-conscious:
 - NEVER print an entire large DataFrame; use .head(), .describe(), .value_counts().head(20).
@@ -112,14 +133,18 @@ def _tool_result_for_llm(result: dict) -> str:
     if result.get("table") is not None:
         payload["table_preview"] = result["table"][:10]
         payload["table_rows_returned"] = len(result["table"])
-    if result.get("chart"):
-        payload["chart"] = "rendered and shown to the user"
+    if result.get("charts"):
+        n = len(result["charts"])
+        payload["chart"] = f"{n} chart(s) rendered and shown to the user" if n != 1 else "rendered and shown to the user"
     return json.dumps(payload, default=str)
 
 
 def _save_conversation(session_id: str, messages: list[dict]) -> None:
     """Persist history, trimmed to system prompt + last MAX_HISTORY messages."""
     _CONVERSATIONS[session_id] = [messages[0]] + messages[1:][-MAX_HISTORY:]
+    _CONVERSATIONS.move_to_end(session_id)
+    while len(_CONVERSATIONS) > MAX_CONVERSATIONS:
+        _CONVERSATIONS.popitem(last=False)
 
 
 @router.post("/")
@@ -130,6 +155,8 @@ async def agent(req: AgentRequest):
     # Continue the existing conversation if there is one — this is what lets
     # the user say "fix it" / "now color by category" and have it just work
     messages = _CONVERSATIONS.get(session_id)
+    if messages is not None:
+        _CONVERSATIONS.move_to_end(session_id)
     if messages is None:
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT.format(schema=req.context or "unknown")},
@@ -179,7 +206,7 @@ async def agent(req: AgentRequest):
                     "step": step,
                     "stdout": result.get("stdout"),
                     "table": result.get("table"),
-                    "chart": result.get("chart"),
+                    "charts": result.get("charts"),
                     "error": result.get("error"),
                     "retrying": bool(result.get("error")),
                 })
@@ -197,6 +224,21 @@ async def agent(req: AgentRequest):
 
     return StreamingResponse(stream(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+class WorkspaceRequest(BaseModel):
+    path: str = ""
+
+
+@router.post("/workspace")
+async def workspace(req: WorkspaceRequest):
+    """Set (or query, with empty path) the workspace folder the agent may access."""
+    if not req.path:
+        return {"path": get_workspace()}
+    try:
+        return set_workspace(req.path)
+    except ValueError as e:
+        return {"error": str(e)}
 
 
 @router.post("/reset")

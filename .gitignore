@@ -21,3 +21,6 @@ Thumbs.db
 # Local data
 *.log
 uploads/
+
+# Design tool scratch
+.impeccable/

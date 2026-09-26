@@ -5,6 +5,7 @@ import sys
 import io
 import base64
 import traceback
+from collections import OrderedDict
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -13,6 +14,8 @@ import matplotlib.pyplot as plt
 from typing import Any
 
 from services.datastore import get_dataset
+from services.ml import train_model
+from services.workspace import list_files, load_file
 
 try:
     import seaborn as sns
@@ -59,18 +62,29 @@ SAFE_GLOBALS = {
     "pd": pd,
     "np": np,
     "plt": plt,
+    "train_model": train_model,   # one-call ML pipeline (services/ml.py)
+    "list_files": list_files,     # workspace folder access (services/workspace.py)
+    "load_file": load_file,       # → DataFrame from workspace file
 }
 if sns is not None:
     SAFE_GLOBALS["sns"] = sns
 
 # Persistent namespaces per session — like a notebook kernel, variables
 # survive across run_code calls so multi-step (agentic) analysis works.
-_SESSIONS: dict[str, dict[str, Any]] = {}
+# Bounded (like services/datastore.py's dataset cache) so a long-running session
+# on a low-RAM machine doesn't accumulate namespaces — and their DataFrames — forever.
+MAX_SESSIONS = 20
+_SESSIONS: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
 
 
 def get_session(session_id: str) -> dict[str, Any]:
     """Return (creating if needed) the persistent namespace for a session."""
-    return _SESSIONS.setdefault(session_id, {})
+    if session_id in _SESSIONS:
+        _SESSIONS.move_to_end(session_id)
+    ns = _SESSIONS.setdefault(session_id, {})
+    while len(_SESSIONS) > MAX_SESSIONS:
+        _SESSIONS.popitem(last=False)
+    return ns
 
 
 def reset_session(session_id: str) -> None:
@@ -119,12 +133,12 @@ def run_code(
     old_stdout = sys.stdout
     sys.stdout = stdout_capture
 
-    result: dict[str, Any] = {"stdout": "", "table": None, "chart": None, "error": None}
+    result: dict[str, Any] = {"stdout": "", "table": None, "chart": None, "charts": None, "error": None}
 
     keys_before = set(local_ns.keys())
 
     try:
-        plt.clf()
+        plt.close("all")   # drop any figures left over from a previous run — keeps memory flat across a long session
         exec(code, {**SAFE_GLOBALS, **local_ns}, local_ns)  # noqa: S102
 
         result["stdout"] = stdout_capture.getvalue()
@@ -138,14 +152,23 @@ def run_code(
                 result["table"] = val.head(100).fillna("").to_dict(orient="records")
                 break
 
-        # Check if a matplotlib figure was drawn → encode as base64 PNG
-        fig = plt.gcf()
-        if fig.get_axes():
+        # Encode EVERY figure the code drew, not just the last one — code that
+        # plots more than once per run (e.g. train_model's diagnostics figure
+        # followed by an extra chart) used to lose all but the final figure.
+        charts = []
+        for num in plt.get_fignums():
+            fig = plt.figure(num)
+            if not fig.get_axes():
+                continue
             buf = io.BytesIO()
             fig.savefig(buf, format="png", bbox_inches="tight")
             buf.seek(0)
-            result["chart"] = base64.b64encode(buf.read()).decode()
-            plt.clf()
+            charts.append(base64.b64encode(buf.read()).decode())
+        plt.close("all")
+
+        if charts:
+            result["charts"] = charts
+            result["chart"] = charts[0]   # back-compat: first chart for older consumers
 
     except Exception:
         result["error"] = traceback.format_exc()

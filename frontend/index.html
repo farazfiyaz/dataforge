@@ -3,286 +3,676 @@
   DataForge — AI-powered local data science tool
   Copyright (C) 2026 Mohammed Farazuddin <farazfiyaz2@gmail.com>
   License: AGPL-3.0 — see LICENSE
+  Typeface: Archivo (SIL OFL 1.1, see fonts/OFL-Archivo.txt). Icons: Phosphor (MIT).
 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="light dark" />
 <title>DataForge</title>
+<link rel="preload" href="/static/fonts/archivo-latin.woff2" as="font" type="font/woff2" crossorigin />
 <style>
+@font-face {
+  font-family: "Archivo";
+  src: url("/static/fonts/archivo-latin.woff2") format("woff2");
+  font-weight: 100 900; font-stretch: 62% 125%; font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Archivo";
+  src: url("/static/fonts/archivo-latin-ext.woff2") format("woff2");
+  font-weight: 100 900; font-stretch: 62% 125%; font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Tokens ──
+   One saturated field (pine green) owns the sidebar and active states.
+   The reading column stays achromatic so the charts carry the colour. */
 :root {
-  --bg:        #0f1117;
-  --surface:   #1a1d27;
-  --surface2:  #21253a;
-  --border:    #2e3148;
-  --accent:    #7c6fff;
-  --accent-dim:#7c6fff22;
-  --text:      #e4e6f0;
-  --muted:     #6b7094;
-  --danger:    #ff6b6b;
-  --success:   #3dd68c;
-  --sidebar-w: 260px;
+  --paper:     #f4f4f1;
+  --paper-2:   #eaeae5;
+  --ink:       #181818;
+  --ink-2:     #4f4f4a;
+  --ink-3:     #6a6a64;
+  --rule:      rgba(24,24,24,.14);
+  --rule-strong: #181818;
+  --field:     #0f6b4f;
+  --field-text: #0f6b4f;
+  --field-ink: #ffffff;
+  --field-ink-2: #cfe3da;
+  --field-hover: rgba(255,255,255,.1);
+  --field-tint: rgba(15,107,79,.07);
+  --danger:    #b4261a;
+  --scrim:     rgba(24,24,24,.42);
+
+  --sidebar-w: 272px;
+  --gutter: clamp(24px, 5vw, 72px);
+  --label-col: 104px;
+  --col-gap: 28px;
+  --measure: 880px;
+
+  --sans: "Archivo", "Segoe UI", system-ui, sans-serif;
+  --mono: "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", monospace;
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  color-scheme: light;
 }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper:     #161618;
+    --paper-2:   #1f1f22;
+    --ink:       #ecebe6;
+    --ink-2:     #b6b5ae;
+    --ink-3:     #93928c;
+    --rule:      rgba(236,235,230,.13);
+    --rule-strong: #ecebe6;
+    --field:     #14805e;
+    --field-text: #5cc79d;
+    --field-ink-2: #eef7f3;
+    --field-tint: rgba(20,128,94,.16);
+    --danger:    #ff7b6b;
+    --scrim:     rgba(0,0,0,.6);
+    color-scheme: dark;
+  }
+}
+
 html, body { height: 100%; }
-body { background: var(--bg); color: var(--text); font-family: -apple-system,'Segoe UI',system-ui,sans-serif; display: flex; height: 100vh; overflow: hidden; }
-
-/* ── Sidebar ── */
-#sidebar { width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
-.sidebar-top { padding: 18px 14px 12px; border-bottom: 1px solid var(--border); }
-.logo { font-size: 1.2rem; font-weight: 800; letter-spacing: -.5px; margin-bottom: 12px; }
-.logo span { color: var(--accent); }
-.sb-btn { width: 100%; padding: 8px 12px; border-radius: 10px; border: 1px solid; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 7px; transition: background .15s; }
-#new-chat-btn { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
-#new-chat-btn:hover { background: rgba(124,111,255,.25); }
-
-/* Project list */
-#project-list { flex: 1; overflow-y: auto; padding: 8px 8px 0; }
-.project-group { margin-bottom: 4px; }
-.project-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 7px 8px; border-radius: 8px; cursor: pointer;
-  font-size: 0.8rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px;
-  transition: background .12s;
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: var(--sans); font-size: 15px; line-height: 1.55;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  display: flex; height: 100vh; overflow: hidden;
+  caret-color: var(--field);
 }
-.project-header:hover { background: var(--surface2); color: var(--text); }
-.project-header .chevron { font-size: 0.65rem; transition: transform .2s; }
-.project-header.open .chevron { transform: rotate(90deg); }
-.project-chats { display: none; padding-left: 8px; }
-.project-chats.open { display: block; }
+::selection { background: var(--field); color: var(--field-ink); }
+button, select, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--field-text); outline-offset: 2px; }
+
+.ic { width: 1em; height: 1em; fill: currentColor; flex-shrink: 0; vertical-align: -0.125em; }
+.spin { animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Sidebar: the colour field ── */
+#sidebar {
+  width: var(--sidebar-w); flex-shrink: 0;
+  background: var(--field); color: var(--field-ink);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+#sidebar :focus-visible { outline-color: var(--field-ink); }
+#sidebar ::selection { background: var(--field-ink); color: var(--field); }
+.sidebar-top { padding: 28px 20px 20px 24px; }
+.logo {
+  font-size: 34px; line-height: 1; font-weight: 800; font-stretch: 112%;
+  letter-spacing: -0.035em; margin-bottom: 28px;
+}
+.sb-btn {
+  width: 100%; height: 40px; padding: 0 14px;
+  display: flex; align-items: center; gap: 10px;
+  background: var(--field-ink); color: var(--field);
+  border: 1px solid var(--field-ink);
+  font-size: 14px; font-weight: 600;
+  transition: background .15s, color .15s;
+}
+.sb-btn:hover { background: transparent; color: var(--field-ink); }
+.sb-btn:active { transform: translateY(1px); }
+
+.sb-nav { padding: 0 12px 10px; }
+.sb-link {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; background: none; border: 0; text-align: left;
+  font-size: 14px; font-weight: 500; color: var(--field-ink);
+  transition: background .12s, color .12s;
+}
+.sb-link .ic { font-size: 16px; }
+.sb-link:hover { background: var(--field-hover); }
+.sb-link.active { background: var(--field-ink); color: var(--field); font-weight: 600; }
+.sb-link .count { margin-left: auto; font-size: 12px; font-weight: 500; opacity: .8; }
+.sb-section-title { padding: 14px 24px 6px; font-size: 12px; font-weight: 600; font-stretch: 88%; color: var(--field-ink-2); border-top: 1px solid rgba(255,255,255,.22); }
+#project-list { flex: 1; overflow-y: auto; padding: 0 12px 8px; scrollbar-color: rgba(255,255,255,.3) transparent; }
+.chat-item .chat-proj { display: block; font-size: 12px; font-weight: 400; color: var(--field-ink-2); overflow: hidden; text-overflow: ellipsis; }
+.chat-item.active .chat-proj { color: var(--field); }
 .chat-item {
-  padding: 7px 10px; border-radius: 7px; font-size: 0.82rem; color: var(--muted);
-  cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  display: flex; align-items: center; gap: 6px; transition: background .12s, color .12s;
+  display: block; width: 100%; text-align: left;
+  padding: 7px 12px; background: none; border: 0;
+  font-size: 14px; color: var(--field-ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: background .12s, color .12s;
 }
-.chat-item:hover { background: var(--surface2); color: var(--text); }
-.chat-item.active { background: var(--accent-dim); color: var(--accent); }
-.chat-item .chat-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.chat-item:hover { background: var(--field-hover); }
+.chat-item.active { background: var(--field-ink); color: var(--field); font-weight: 600; }
+.project-empty { padding: 4px 12px 8px; font-size: 13px; color: var(--field-ink-2); }
 
-#new-project-btn { margin: 10px 8px; padding: 7px 12px; background: none; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 6px; width: calc(100% - 16px); transition: border-color .15s, color .15s; }
-#new-project-btn:hover { border-color: var(--accent); color: var(--accent); }
-
-.sidebar-footer { padding: 10px 14px; border-top: 1px solid var(--border); font-size: 0.72rem; color: var(--muted); display: flex; justify-content: space-between; }
+.sidebar-footer {
+  padding: 18px 24px 20px; margin-top: 8px;
+  border-top: 1px solid rgba(255,255,255,.22);
+  font-size: 12px; line-height: 1.5; color: var(--field-ink-2);
+}
+.sidebar-footer strong { color: var(--field-ink); font-weight: 600; }
 
 /* ── Modal ── */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 24px; width: 340px; }
-.modal h3 { font-size: 1rem; margin-bottom: 14px; }
-.modal input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 9px 12px; font-size: 0.9rem; font-family: inherit; }
-.modal input:focus { outline: none; border-color: var(--accent); }
-.modal-actions { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
-.modal-btn { padding: 8px 16px; border-radius: 8px; border: none; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
-.modal-btn.primary { background: var(--accent); color: #fff; }
-.modal-btn.ghost { background: var(--border); color: var(--text); }
+.modal-overlay { position: fixed; inset: 0; background: var(--scrim); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 24px; }
+.modal {
+  background: var(--paper); color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  padding: 28px; width: min(400px, 100%);
+}
+.modal h3 { font-size: 22px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 20px; }
+.field-label { display: block; font-size: 12px; font-weight: 600; font-stretch: 88%; color: var(--ink-2); margin-bottom: 6px; }
+.modal input {
+  width: 100%; height: 42px; padding: 0 12px;
+  background: var(--paper); border: 1px solid var(--rule-strong); border-radius: 0;
+  font-size: 15px;
+}
+.modal textarea {
+  width: 100%; padding: 10px 12px; min-height: 84px; resize: vertical;
+  background: var(--paper); border: 1px solid var(--rule-strong); border-radius: 0;
+  font-size: 15px; line-height: 1.5;
+}
+.modal textarea:focus { outline: 2px solid var(--field-text); outline-offset: -1px; }
+.modal .field + .field { margin-top: 16px; }
+.field-hint { font-weight: 400; color: var(--ink-3); }
+.modal input:focus { outline: 2px solid var(--field-text); outline-offset: -1px; }
+.modal-actions { display: flex; gap: 8px; margin-top: 24px; justify-content: flex-end; }
+
+/* ── Buttons ── */
+.btn {
+  height: 38px; padding: 0 16px;
+  display: inline-flex; align-items: center; gap: 8px;
+  border: 1px solid var(--rule-strong); border-radius: 0;
+  background: transparent; color: var(--ink);
+  font-size: 14px; font-weight: 600; white-space: nowrap;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.btn:hover { background: var(--ink); color: var(--paper); }
+.btn:active { transform: translateY(1px); }
+.btn.primary { background: var(--field); border-color: var(--field); color: var(--field-ink); }
+.btn.primary:hover { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.btn.quiet { border-color: transparent; color: var(--ink-2); }
+.btn.quiet:hover { background: var(--paper-2); color: var(--ink); }
+.btn:disabled { opacity: .45; cursor: default; transform: none; }
+.btn:disabled:hover { background: transparent; color: var(--ink); }
+.btn.primary:disabled:hover { background: var(--field); color: var(--field-ink); }
+.btn.sm { height: 30px; padding: 0 10px; font-size: 13px; gap: 6px; }
 
 /* ── Main ── */
-#main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+#main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 
-/* ── Welcome ── */
-#welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 40px 24px; text-align: center; }
-#welcome h1 { font-size: 2rem; font-weight: 800; letter-spacing: -.5px; }
-#welcome h1 span { color: var(--accent); }
-#welcome p { color: var(--muted); font-size: 0.95rem; max-width: 400px; line-height: 1.6; }
-.suggestion-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; max-width: 480px; width: 100%; }
-.suggestion-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; text-align: left; cursor: pointer; transition: border-color .15s, background .15s; }
-.suggestion-card:hover { border-color: var(--accent); background: var(--accent-dim); }
-.suggestion-card .s-icon { font-size: 1.2rem; margin-bottom: 5px; }
-.suggestion-card .s-title { font-size: 0.84rem; font-weight: 600; }
-.suggestion-card .s-desc  { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
+/* Model status (first-run download / warm-up) */
+#model-banner {
+  display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+  padding: 10px var(--gutter);
+  border-bottom: 1px solid var(--rule);
+  font-size: 13px; color: var(--ink);
+}
+#model-banner .ic { font-size: 16px; color: var(--field-text); }
+#model-banner.error { color: var(--danger); }
+#model-banner.error .ic { color: var(--danger); }
+#model-banner .detail { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* Shared column system: a narrow label column and a reading column */
+.cols {
+  display: grid; grid-template-columns: var(--label-col) minmax(0, 1fr); column-gap: var(--col-gap);
+  max-width: var(--measure); width: 100%;
+}
+
+/* ── Empty state ── */
+#welcome { flex: 1; overflow-y: auto; padding: clamp(32px, 8vh, 96px) var(--gutter) 32px; }
+.welcome-inner { max-width: var(--measure); padding-left: calc(var(--label-col) + var(--col-gap)); }
+#welcome h1 {
+  font-size: clamp(34px, 4.1vw, 54px); line-height: 1.04; font-weight: 700;
+  letter-spacing: -0.035em;
+}
+#welcome h1 span { display: block; }
+.lede { margin-top: 20px; max-width: 52ch; font-size: 17px; line-height: 1.5; color: var(--ink-2); }
+.welcome-actions { margin-top: 28px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.welcome-actions .note { font-size: 13px; color: var(--ink-3); }
+.prompts-title { margin-top: 48px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.suggestion-grid {
+  margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr;
+  border-top: 1px solid var(--rule-strong);
+}
+.suggestion-card {
+  display: block; text-align: left; background: none; border: 0;
+  border-bottom: 1px solid var(--rule);
+  padding: 16px 20px 18px 0;
+  transition: background .15s, padding .25s var(--ease-out);
+}
+.suggestion-card:nth-child(odd) { border-right: 1px solid var(--rule); }
+.suggestion-card:nth-child(even) { padding-left: 20px; }
+.suggestion-card:hover { background: var(--field-tint); }
+.suggestion-card:hover .s-title { color: var(--field-text); }
+.suggestion-card .s-title { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; transition: color .15s; }
+.suggestion-card .s-title .ic { font-size: 13px; opacity: 0; transform: translateX(-4px); transition: opacity .15s, transform .25s var(--ease-out); }
+.suggestion-card:hover .s-title .ic { opacity: 1; transform: none; }
+.suggestion-card .s-desc { font-size: 14px; color: var(--ink-3); margin-top: 2px; }
 
 /* ── Conversation ── */
-#conversation { flex: 1; overflow-y: auto; padding: 28px 0 16px; display: none; flex-direction: column; }
-.turn { max-width: 740px; width: 100%; margin: 0 auto; padding: 0 24px; display: flex; flex-direction: column; gap: 4px; }
-.turn + .turn { margin-top: 24px; }
-.role-label { font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
-.role-label.user { color: var(--muted); }
-.role-label.assistant { color: var(--accent); }
-.role-avatar { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 800; }
-.role-avatar.user { background: var(--surface2); color: var(--text); }
-.role-avatar.assistant { background: var(--accent); color: #fff; }
-.msg-body { font-size: 0.92rem; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
-.msg-body.user-body { background: var(--surface); border: 1px solid var(--border); border-radius: 0 12px 12px 12px; padding: 11px 15px; display: inline-block; max-width: 100%; }
+#conversation {
+  flex: 1; overflow-y: auto; overflow-anchor: none;
+  padding: 40px var(--gutter) 24px;
+  display: none; flex-direction: column; scrollbar-gutter: stable;
+}
+.turn {
+  display: grid; grid-template-columns: var(--label-col) minmax(0, 1fr); column-gap: var(--col-gap);
+  max-width: var(--measure); width: 100%;
+  animation: turnIn .35s var(--ease-out);
+  content-visibility: auto; contain-intrinsic-size: auto 220px;
+}
+.turn > * { grid-column: 2; min-width: 0; }
+.turn > .role-label { grid-column: 1; grid-row: 1 / span 40; align-self: start; }
+.turn + .turn { margin-top: 36px; }
+.turn.user + .turn.assistant { margin-top: 20px; }
+@keyframes turnIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-/* Code block */
-.inline-code-block { background: #0d1020; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin: 8px 0; }
-.code-header { padding: 8px 14px; display: flex; align-items: center; justify-content: space-between; background: var(--surface2); border-bottom: 1px solid var(--border); }
-.code-lang { font-size: 0.72rem; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
-.code-actions { display: flex; gap: 6px; }
-.code-btn { padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.73rem; cursor: pointer; transition: all .12s; font-family: inherit; }
-.code-btn:hover { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
-.code-btn.run { background: var(--accent); color: #fff; border-color: var(--accent); }
-.code-btn.run:hover { opacity: .85; }
-.code-content { padding: 14px 16px; font-family: 'Cascadia Code','Fira Code','Consolas',monospace; font-size: 0.81rem; line-height: 1.6; overflow-x: auto; color: #c9d1e9; }
+.role-label {
+  padding-top: 3px; font-size: 12px; font-weight: 600; font-stretch: 88%;
+  color: var(--ink-3); text-align: right;
+}
+.role-label.assistant { color: var(--field-text); }
 
-/* Inline table */
-.inline-table-wrap { overflow-x: auto; margin: 8px 0; border-radius: 10px; border: 1px solid var(--border); }
-.inline-table { width: 100%; border-collapse: collapse; font-size: 0.81rem; }
-.inline-table th { background: var(--surface2); color: var(--muted); padding: 8px 13px; text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: .4px; border-bottom: 1px solid var(--border); }
-.inline-table td { padding: 8px 13px; border-bottom: 1px solid var(--border); }
-.inline-table tr:last-child td { border-bottom: none; }
-.inline-table tr:hover td { background: rgba(255,255,255,.02); }
-
-/* Inline chart */
-.inline-chart { margin: 8px 0; border-radius: 10px; overflow: hidden; max-width: 100%; display: block; border: 1px solid var(--border); }
-
-/* Auto-analyze */
-.auto-btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius: 10px; border: 1px solid var(--accent); background: var(--accent-dim); color: var(--accent); font-size: 0.84rem; font-weight: 600; cursor: pointer; transition: background .15s; margin-top: 8px; font-family: inherit; }
-.auto-btn:hover { background: rgba(124,111,255,.25); }
-.auto-btn:disabled { opacity: .4; cursor: default; }
-.cleaning-step { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--surface2); border-radius: 0 8px 8px 0; margin: 4px 0; font-size: 0.82rem; }
-.cleaning-step .step-title { font-weight: 600; color: var(--text); }
-.cleaning-step .step-detail { color: var(--muted); font-size: 0.78rem; }
-.plot-formula { font-size: 0.75rem; color: var(--muted); font-style: italic; margin: 4px 0 8px; font-family: monospace; }
-.plot-section-title { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin: 14px 0 6px; }
-.download-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--success); background: rgba(61,214,140,.1); color: var(--success); font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: background .15s; font-family: inherit; margin-top: 4px; }
-.download-btn:hover { background: rgba(61,214,140,.2); }
-
-/* Plot suggestions */
-.plot-suggestions { display: flex; flex-wrap: wrap; gap: 7px; margin: 8px 0; }
-.plot-suggest-chip { padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); font-size: 0.78rem; cursor: pointer; transition: all .12s; }
-.plot-suggest-chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
-
-/* EDA cards */
-.eda-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); gap: 8px; margin: 8px 0; }
-.eda-stat { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
-.eda-stat .label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
-.eda-stat .value { font-size: 1.35rem; font-weight: 700; margin-top: 2px; }
+.msg-body { font-size: 15px; line-height: 1.62; white-space: pre-wrap; word-break: break-word; max-width: 72ch; }
+.msg-body + .msg-body { margin-top: 10px; }
+.msg-body.user-body { font-size: 18px; line-height: 1.45; font-weight: 500; letter-spacing: -0.01em; }
+.msg-body.error-text { color: var(--danger); }
+.msg-body strong { font-weight: 700; }
 
 /* File chip */
-.file-chip { display: inline-flex; align-items: center; gap: 7px; background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 5px 11px; font-size: 0.8rem; margin-bottom: 7px; }
-.file-chip .chip-accent { color: var(--accent); }
+.file-chip {
+  justify-self: start; display: inline-flex; align-items: center; gap: 8px;
+  padding: 5px 10px; margin-bottom: 8px;
+  border: 1px solid var(--rule-strong); font-size: 13px; font-weight: 500;
+}
+.file-chip .ic { font-size: 14px; }
 
-/* Typing */
-.typing { display: flex; gap: 4px; align-items: center; padding: 4px 0; }
-.typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: .4; animation: bounce .9s infinite; }
-.typing span:nth-child(2) { animation-delay: .15s; }
-.typing span:nth-child(3) { animation-delay: .3s; }
-@keyframes bounce { 0%,80%,100%{transform:scale(.8);opacity:.4} 40%{transform:scale(1.2);opacity:1} }
+/* Thinking sign: a 3x3 grid of data cells lighting in a diagonal wave,
+   the current activity, and a live elapsed-seconds counter. */
+.typing { display: flex; align-items: center; gap: 12px; padding: 8px 0; font-size: 14px; }
+.think-grid { display: grid; grid-template-columns: repeat(3, 6px); gap: 2px; flex-shrink: 0; }
+.think-grid i { width: 6px; height: 6px; background: var(--field-text); opacity: .15; animation: cell 1.2s ease-in-out infinite; }
+.think-grid i:nth-child(2), .think-grid i:nth-child(4) { animation-delay: .12s; }
+.think-grid i:nth-child(3), .think-grid i:nth-child(5), .think-grid i:nth-child(7) { animation-delay: .24s; }
+.think-grid i:nth-child(6), .think-grid i:nth-child(8) { animation-delay: .36s; }
+.think-grid i:nth-child(9) { animation-delay: .48s; }
+@keyframes cell { 0%, 60%, 100% { opacity: .15; } 25% { opacity: 1; } }
+.think-label { font-weight: 500; color: var(--ink); }
+.think-time { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.think-note { flex-basis: 100%; padding-left: 32px; font-size: 13px; color: var(--ink-3); }
+.think-note:empty { display: none; }
+.typing { flex-wrap: wrap; row-gap: 2px; }
 
-/* ── Input bar ── */
-#input-area { padding: 12px 24px 16px; background: var(--bg); border-top: 1px solid var(--border); width: 100%; max-width: 788px; align-self: center; }
-#input-wrap { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; transition: border-color .15s; }
-#input-wrap:focus-within { border-color: var(--accent); }
-#attached-file { display: none; align-items: center; gap: 7px; padding: 8px 13px 0; font-size: 0.8rem; color: var(--muted); }
-#attached-file.visible { display: flex; }
-#attached-file .fname { color: var(--text); font-weight: 600; }
-#remove-file { background: none; border: none; color: var(--muted); cursor: pointer; font-size: .95rem; padding: 0 2px; }
+/* ── Chat header (project / chat title) ── */
+#chat-header { flex-shrink: 0; padding: 14px var(--gutter) 12px; border-bottom: 1px solid var(--rule); }
+#chat-header .cols > * { grid-column: 2; }
+.crumbs { display: flex; align-items: center; gap: 8px; font-size: 13px; min-width: 0; }
+.crumb { background: none; border: 0; padding: 0; color: var(--ink-3); font-weight: 500; white-space: nowrap; }
+.crumb:hover { color: var(--field-text); text-decoration: underline; text-underline-offset: 3px; }
+.crumb-sep { color: var(--ink-3); }
+.crumb-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Projects pages ── */
+.page { flex: 1; overflow-y: auto; padding: clamp(32px, 8vh, 80px) var(--gutter) 32px; }
+.page-inner { max-width: var(--measure); padding-left: calc(var(--label-col) + var(--col-gap)); }
+.back-link { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; margin-bottom: 18px; font-size: 13px; font-weight: 500; color: var(--ink-3); }
+.back-link .ic { transform: rotate(180deg); font-size: 11px; }
+.back-link:hover { color: var(--field-text); }
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.page h1 { font-size: clamp(32px, 3.6vw, 46px); line-height: 1.05; font-weight: 700; letter-spacing: -0.035em; overflow-wrap: anywhere; }
+.page-lede { margin-top: 12px; max-width: 60ch; font-size: 16px; color: var(--ink-2); white-space: pre-wrap; }
+.page-lede.empty { color: var(--ink-3); }
+.page-actions { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+.btn.danger { color: var(--danger); border-color: transparent; }
+.btn.danger:hover { background: var(--danger); color: var(--paper); }
+.btn.danger:disabled:hover { background: transparent; color: var(--danger); }
+.btn.danger-fill { background: var(--danger); border-color: var(--danger); color: var(--paper); }
+.btn.danger-fill:hover { background: var(--ink); border-color: var(--ink); }
+.confirm-row { margin-top: 16px; padding: 12px 0; border-top: 1px solid var(--rule-strong); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+.confirm-row[hidden] { display: none; }
+
+.list-title { margin-top: 44px; display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; color: var(--ink-2); padding-bottom: 8px; border-bottom: 1px solid var(--rule-strong); }
+.row-list { display: flex; flex-direction: column; }
+.row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 96px 150px; gap: 16px; align-items: baseline;
+  width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--rule);
+  padding: 14px 0; transition: background .12s;
+}
+.row:hover { background: var(--field-tint); }
+.row:hover .row-name { color: var(--field-text); }
+.row-name { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color .12s; }
+.row-sub { display: block; margin-top: 2px; font-size: 13px; font-weight: 400; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 0; }
+.row-meta { font-size: 13px; color: var(--ink-3); text-align: right; white-space: nowrap; }
+.row-empty { padding: 20px 0; font-size: 14px; color: var(--ink-3); border-bottom: 1px solid var(--rule); }
+
+/* Profile: four readings, each with its context */
+.profile {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 14px 0 6px; border-top: 1px solid var(--rule-strong);
+}
+.reading { padding: 12px 16px 14px 0; }
+.reading + .reading { padding-left: 16px; border-left: 1px solid var(--rule); }
+.reading .value { font-size: 46px; line-height: 1; font-weight: 300; font-stretch: 80%; letter-spacing: -0.03em; }
+.reading .label { margin-top: 6px; font-size: 13px; font-weight: 600; }
+.reading .ctx { font-size: 12px; color: var(--ink-3); }
+
+.section-title { margin: 22px 0 8px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+
+/* Plot suggestions */
+.plot-suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.plot-suggest-chip {
+  padding: 6px 11px; background: transparent;
+  border: 1px solid var(--rule); border-radius: 0;
+  font-size: 13px; color: var(--ink-2);
+  transition: border-color .12s, color .12s, background .12s;
+}
+.plot-suggest-chip:hover { border-color: var(--field-text); color: var(--field-text); background: var(--field-tint); }
+.plot-suggest-chip:active { background: var(--field); color: var(--field-ink); }
+
+.auto-row { display: flex; align-items: center; gap: 14px; margin-top: 18px; flex-wrap: wrap; }
+.auto-row .note { font-size: 13px; color: var(--ink-3); }
+
+/* Cleaning report: definition rows */
+.clean-list { margin: 10px 0 4px; border-top: 1px solid var(--rule-strong); }
+.clean-row { display: grid; grid-template-columns: minmax(140px, 30%) 1fr; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
+.clean-row .step-title { font-weight: 600; }
+.clean-row .step-detail { color: var(--ink-2); }
+
+.figure { margin-top: 22px; }
+.figure-title { font-size: 15px; font-weight: 600; }
+.plot-formula { font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin: 2px 0 8px; }
+.inline-chart { display: block; max-width: 100%; margin: 10px 0; border: 1px solid var(--rule); background: #fff; }
+
+/* Code block */
+.inline-code-block { margin: 10px 0; border: 1px solid var(--rule); background: var(--paper-2); }
+.code-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 4px 12px; border-bottom: 1px solid var(--rule); }
+.code-lang { font-size: 12px; font-weight: 600; color: var(--ink-3); text-transform: capitalize; }
+.code-actions { display: flex; gap: 2px; }
+.code-btn {
+  height: 28px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; border: 0; font-size: 13px; font-weight: 500; color: var(--ink-2);
+}
+.code-btn:hover { background: var(--paper); color: var(--ink); }
+.code-btn.run { color: var(--field-text); font-weight: 600; }
+.code-btn.run:hover { background: var(--field); color: var(--field-ink); }
+.code-content { padding: 14px 16px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.6; overflow-x: auto; white-space: pre; color: var(--ink); }
+.code-content.wrap { white-space: pre-wrap; }
+
+/* Output (stdout) */
+.output { margin: 10px 0; }
+.output-label { font-size: 12px; font-weight: 600; color: var(--ink-3); margin-bottom: 4px; }
+.output pre { font-family: var(--mono); font-size: 13px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; padding: 10px 0 10px 14px; border-left: 1px solid var(--rule-strong); }
+
+/* Tables */
+.inline-table-wrap { overflow-x: auto; margin: 10px 0; max-height: 440px; overflow-y: auto; }
+.inline-table { border-collapse: collapse; font-size: 13px; min-width: 100%; }
+.inline-table th {
+  position: sticky; top: 0; background: var(--paper);
+  text-align: left; font-weight: 600; white-space: nowrap;
+  padding: 7px 14px 7px 0; border-bottom: 1px solid var(--rule-strong);
+}
+.inline-table td { padding: 6px 14px 6px 0; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.inline-table .num { text-align: right; }
+.inline-table tr:hover td { background: var(--field-tint); }
+
+/* Agent steps */
+.agent-steps { margin: 4px 0 10px; }
+.agent-step { padding: 8px 0; border-bottom: 1px solid var(--rule); }
+.agent-step:first-child { border-top: 1px solid var(--rule); }
+.agent-step-label { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.agent-step-label .ic { font-size: 16px; color: var(--field-text); }
+.agent-step-label .state { color: var(--ink-3); }
+.agent-step-label.error, .agent-step-label.error .ic { color: var(--danger); }
+.agent-step details { margin-top: 2px; padding-left: 26px; }
+.agent-step details summary {
+  cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--ink-3); user-select: none; padding: 2px 0;
+}
+.agent-step details summary::-webkit-details-marker { display: none; }
+.agent-step details summary .ic { font-size: 11px; transition: transform .2s var(--ease-out); }
+.agent-step details[open] summary .ic { transform: rotate(90deg); }
+.agent-step details summary:hover { color: var(--ink); }
+.agent-step > .inline-chart, .agent-step > .inline-table-wrap, .agent-step > .output { margin-left: 26px; max-width: calc(100% - 26px); }
+
+/* ── Composer ── */
+#input-area { padding: 12px var(--gutter) 18px; flex-shrink: 0; }
+#input-area .cols > * { grid-column: 2; }
+#input-wrap { display: flex; flex-direction: column; background: var(--paper); border: 1px solid var(--rule-strong); transition: box-shadow .15s; }
+#input-wrap:focus-within { box-shadow: 0 0 0 1px var(--field-text); border-color: var(--field-text); }
+#attached-file { display: none; align-items: center; gap: 8px; margin: 10px 12px 0; align-self: flex-start; padding: 4px 4px 4px 10px; background: var(--paper-2); font-size: 13px; }
+#attached-file.visible { display: inline-flex; }
+#attached-file .fname { font-weight: 600; }
+#remove-file { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; background: none; border: 0; color: var(--ink-3); }
 #remove-file:hover { color: var(--danger); }
-#msg-input { flex: 1; background: transparent; border: none; color: var(--text); font-size: 0.92rem; padding: 13px 15px 8px; resize: none; min-height: 50px; max-height: 180px; font-family: inherit; line-height: 1.5; }
+#msg-input {
+  background: transparent; border: none; resize: none;
+  font-size: 15px; line-height: 1.5; padding: 14px 16px 8px;
+  min-height: 54px; max-height: 180px;
+}
 #msg-input:focus { outline: none; }
-#msg-input::placeholder { color: var(--muted); }
-.input-bottom { display: flex; align-items: center; justify-content: space-between; padding: 5px 10px 9px; }
-.input-left { display: flex; align-items: center; gap: 6px; }
-#attach-btn { background: none; border: 1px solid var(--border); border-radius: 7px; color: var(--muted); cursor: pointer; padding: 5px 9px; font-size: .95rem; transition: all .12s; }
-#attach-btn:hover { color: var(--text); border-color: var(--text); }
-#mode-select { background: none; border: 1px solid var(--border); border-radius: 7px; color: var(--muted); padding: 5px 9px; font-size: 0.78rem; cursor: pointer; font-family: inherit; }
-#mode-select:focus { outline: none; border-color: var(--accent); }
-.agent-step { border-left: 2px solid var(--border); margin: 8px 0 8px 4px; padding-left: 12px; }
-.agent-step-label { font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
-.agent-step-label .spin { animation: spin .7s linear infinite; display: inline-block; }
-.agent-step-label.error { color: var(--warning, #e0a020); }
-.agent-step details { font-size: 0.8rem; }
-.agent-step details summary { cursor: pointer; color: var(--muted); font-size: 0.75rem; user-select: none; }
-#file-input { display: none; }
-#send-btn { width: 34px; height: 34px; border-radius: 9px; background: var(--accent); border: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: .95rem; transition: opacity .15s; flex-shrink: 0; }
-#send-btn:disabled { opacity: .3; cursor: default; }
-#send-btn:not(:disabled):hover { opacity: .85; }
-.input-hint { text-align: center; font-size: 0.7rem; color: var(--muted); margin-top: 6px; }
+#msg-input::placeholder { color: var(--ink-3); opacity: 1; }
+.input-bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 8px 8px 8px; }
+.input-left { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; }
+.tool-btn { height: 32px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; font-size: 13px; font-weight: 500; color: var(--ink-2); }
+.tool-btn:hover { background: var(--paper-2); color: var(--ink); }
+.tool-btn .ic { font-size: 15px; }
+.divider { width: 1px; height: 18px; background: var(--rule); margin: 0 8px; }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 5px; }
+.modes { display: inline-flex; border: 1px solid var(--rule); }
+.modes input { position: absolute; opacity: 0; pointer-events: none; }
+.modes label { height: 30px; padding: 0 11px; display: inline-flex; align-items: center; font-size: 13px; font-weight: 500; color: var(--ink-2); cursor: pointer; transition: background .12s, color .12s; }
+.modes label + input + label, .modes label + label { border-left: 1px solid var(--rule); }
+.modes label:hover { color: var(--ink); background: var(--paper-2); }
+.modes input:checked + label { background: var(--field); color: var(--field-ink); }
+.modes input:focus-visible + label { outline: 2px solid var(--field-text); outline-offset: 2px; }
+
+#file-input { display: none; }
+#send-btn {
+  width: 38px; height: 38px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--field); border: 0; color: var(--field-ink); font-size: 18px;
+  transition: background .15s, opacity .15s;
+}
+#send-btn:not(:disabled):hover { background: var(--ink); color: var(--paper); }
+#send-btn:not(:disabled):active { transform: translateY(1px); }
+#send-btn:disabled { opacity: .3; cursor: default; }
+.input-hint { font-size: 12px; color: var(--ink-3); margin-top: 8px; }
+
+/* Scrollbars */
+* { scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--rule); border: 2px solid transparent; background-clip: padding-box; }
+#sidebar ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.3); background-clip: padding-box; }
+
+/* ── Narrow windows ── */
+@media (max-width: 1040px) {
+  :root { --sidebar-w: 232px; --label-col: 76px; --col-gap: 20px; }
+  .input-left { flex-wrap: nowrap; }
+  .tool-btn { padding: 0 8px; }
+  .modes label { padding: 0 8px; }
+  .divider { margin: 0 4px; }
+  .profile { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .reading:nth-child(3) { padding-left: 0; border-left: 0; }
+  .reading:nth-child(n+3) { border-top: 1px solid var(--rule); }
+}
+@media (max-width: 760px) {
+  body { flex-direction: column; height: auto; min-height: 100vh; overflow: auto; }
+  #sidebar, #main { width: 100%; max-width: 100vw; }
+  .welcome-inner { padding-left: 0; }
+  .input-left { flex: 1; min-width: 0; }
+  .divider { display: none; }
+  .sidebar-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; }
+  .logo { font-size: 26px; margin: 0; }
+  .sb-btn { width: auto; }
+  #project-list { max-height: 30vh; padding-bottom: 8px; }
+  .sidebar-footer { display: none; }
+  .page-inner { padding-left: 0; }
+  .row { grid-template-columns: minmax(0, 1fr) auto; }
+  .row .row-meta:last-child { display: none; }
+  #main { overflow: visible; }
+  #welcome, #conversation { overflow: visible; }
+  .turn, .cols { grid-template-columns: minmax(0, 1fr); }
+  .turn > .role-label { grid-column: 1; grid-row: auto; text-align: left; margin-bottom: 4px; }
+  .turn > * { grid-column: 1; }
+  #input-area { position: sticky; bottom: 0; background: var(--paper); }
+  #input-area .cols > * { grid-column: 1; }
+  .suggestion-grid { grid-template-columns: 1fr; }
+  .suggestion-card:nth-child(odd) { border-right: 0; }
+  .suggestion-card:nth-child(even) { padding-left: 0; }
+  .profile { grid-template-columns: 1fr 1fr; }
+  .reading:nth-child(3) { padding-left: 0; border-left: 0; }
+  .reading:nth-child(n+3) { border-top: 1px solid var(--rule); }
+  .input-bottom { align-items: flex-end; }
+}
+
+@media (max-height: 720px) and (min-width: 761px) {
+  #welcome { padding-top: 28px; }
+  #welcome h1 { font-size: clamp(30px, 3.4vw, 40px); }
+  .lede { margin-top: 12px; font-size: 15px; }
+  .welcome-actions { margin-top: 18px; }
+  .prompts-title { margin-top: 24px; }
+  .suggestion-card { padding-top: 10px; padding-bottom: 12px; }
+  .suggestion-card .s-desc { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+  .think-grid i { animation: none; opacity: .5; }
+  .think-grid i:nth-child(odd) { opacity: 1; }
+}
 </style>
 </head>
 <body>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <symbol id="i-plus" viewBox="0 0 256 256"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></symbol>
+  <symbol id="i-paperclip" viewBox="0 0 256 256"><path d="M209.66,122.34a8,8,0,0,1,0,11.32l-82.05,82a56,56,0,0,1-79.2-79.21L147.67,35.73a40,40,0,1,1,56.61,56.55L105,193A24,24,0,1,1,71,159L154.3,74.38A8,8,0,1,1,165.7,85.6L82.39,170.31a8,8,0,1,0,11.27,11.36L192.93,81A24,24,0,1,0,159,47L59.76,147.68a40,40,0,1,0,56.53,56.62l82.06-82A8,8,0,0,1,209.66,122.34Z"/></symbol>
+  <symbol id="i-folder-open" viewBox="0 0 256 256"><path d="M245,110.64A16,16,0,0,0,232,104H216V88a16,16,0,0,0-16-16H130.67L102.94,51.2a16.14,16.14,0,0,0-9.6-3.2H40A16,16,0,0,0,24,64V208h0a8,8,0,0,0,8,8H211.1a8,8,0,0,0,7.59-5.47l28.49-85.47A16.05,16.05,0,0,0,245,110.64ZM93.34,64,123.2,86.4A8,8,0,0,0,128,88h72v16H69.77a16,16,0,0,0-15.18,10.94L40,158.7V64Zm112,136H43.1l26.67-80H232Z"/></symbol>
+  <symbol id="i-arrow-up" viewBox="0 0 256 256"><path d="M205.66,117.66a8,8,0,0,1-11.32,0L136,59.31V216a8,8,0,0,1-16,0V59.31L61.66,117.66a8,8,0,0,1-11.32-11.32l72-72a8,8,0,0,1,11.32,0l72,72A8,8,0,0,1,205.66,117.66Z"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 256 256"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 256 256"><path d="M232.4,114.49,88.32,26.35a16,16,0,0,0-16.2-.3A15.86,15.86,0,0,0,64,39.87V216.13A15.94,15.94,0,0,0,80,232a16.07,16.07,0,0,0,8.36-2.35L232.4,141.51a15.81,15.81,0,0,0,0-27ZM80,215.94V40l143.83,88Z"/></symbol>
+  <symbol id="i-download-simple" viewBox="0 0 256 256"><path d="M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0Zm-101.66,5.66a8,8,0,0,0,11.32,0l40-40a8,8,0,0,0-11.32-11.32L136,124.69V32a8,8,0,0,0-16,0v92.69L93.66,98.34a8,8,0,0,0-11.32,11.32Z"/></symbol>
+  <symbol id="i-caret-right" viewBox="0 0 256 256"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 256 256"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></symbol>
+  <symbol id="i-warning" viewBox="0 0 256 256"><path d="M236.8,188.09,149.35,36.22h0a24.76,24.76,0,0,0-42.7,0L19.2,188.09a23.51,23.51,0,0,0,0,23.72A24.35,24.35,0,0,0,40.55,224h174.9a24.35,24.35,0,0,0,21.33-12.19A23.51,23.51,0,0,0,236.8,188.09ZM222.93,203.8a8.5,8.5,0,0,1-7.48,4.2H40.55a8.5,8.5,0,0,1-7.48-4.2,7.59,7.59,0,0,1,0-7.72L120.52,44.21a8.75,8.75,0,0,1,15,0l87.45,151.87A7.59,7.59,0,0,1,222.93,203.8ZM120,144V104a8,8,0,0,1,16,0v40a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,180Z"/></symbol>
+  <symbol id="i-x" viewBox="0 0 256 256"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></symbol>
+  <symbol id="i-circle-notch" viewBox="0 0 256 256"><path d="M232,128a104,104,0,0,1-208,0c0-41,23.81-78.36,60.66-95.27a8,8,0,0,1,6.68,14.54C60.15,61.59,40,93.27,40,128a88,88,0,0,0,176,0c0-34.73-20.15-66.41-51.34-80.73a8,8,0,0,1,6.68-14.54C208.19,49.64,232,87,232,128Z"/></symbol>
+</svg>
 
 <!-- Sidebar -->
-<nav id="sidebar">
+<nav id="sidebar" aria-label="Projects and chats">
   <div class="sidebar-top">
-    <div class="logo">Data<span>Forge</span></div>
-    <button class="sb-btn" id="new-chat-btn">＋ New chat</button>
+    <div class="logo">DataForge</div>
+    <button class="sb-btn" id="new-chat-btn"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg>New chat</button>
   </div>
+  <div class="sb-nav">
+    <button class="sb-link" id="projects-link"><svg class="ic" aria-hidden="true"><use href="#i-folder-open"/></svg>Projects<span class="count" id="projects-count"></span></button>
+  </div>
+  <div class="sb-section-title">Recent</div>
   <div id="project-list"></div>
-  <button id="new-project-btn">＋ New project</button>
   <div class="sidebar-footer">
-    <span>DataForge v0.1</span>
-    <span>© 2026 Mohammed Farazuddin</span>
+    <div><strong>DataForge</strong> <span id="app-version">v0.1</span>, runs locally</div>
+    <div>© 2026 Mohammed Farazuddin</div>
   </div>
 </nav>
 
 <!-- New Project Modal -->
-<div class="modal-overlay" id="project-modal" style="display:none">
+<div class="modal-overlay" id="project-modal" style="display:none" role="dialog" aria-modal="true" aria-labelledby="project-modal-title">
   <div class="modal">
-    <h3>New Project</h3>
-    <input type="text" id="project-name-input" placeholder="Project name…" maxlength="40" />
+    <h3 id="project-modal-title">New project</h3>
+    <div class="field">
+      <label class="field-label" for="project-name-input">Name</label>
+      <input type="text" id="project-name-input" maxlength="40" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label class="field-label" for="project-desc-input">What is it for? <span class="field-hint">Optional</span></label>
+      <textarea id="project-desc-input" maxlength="240" rows="3"></textarea>
+    </div>
     <div class="modal-actions">
-      <button class="modal-btn ghost" id="modal-cancel">Cancel</button>
-      <button class="modal-btn primary" id="modal-create">Create</button>
+      <button class="btn quiet" id="modal-cancel">Cancel</button>
+      <button class="btn primary" id="modal-create">Create project</button>
     </div>
   </div>
 </div>
 
 <!-- Main -->
-<div id="main">
+<main id="main">
 
-  <!-- Welcome -->
+  <!-- Local model status (first-run download / warm-up) -->
+  <div id="model-banner" role="status" style="display:none"></div>
+
+  <!-- Chat header: which project this chat belongs to -->
+  <div id="chat-header" style="display:none"><div class="cols"><div class="crumbs" id="crumbs"></div></div></div>
+
+  <!-- Projects list and single project pages -->
+  <div id="projects-view" class="page" style="display:none"></div>
+  <div id="project-view" class="page" style="display:none"></div>
+
+  <!-- Empty state -->
   <div id="welcome">
-    <h1>Hello, I'm <span>DataForge</span></h1>
-    <p>Your local AI data scientist. Upload a CSV or Excel file and ask me anything about your data.</p>
-    <div class="suggestion-grid">
-      <div class="suggestion-card" data-prompt="Analyze my dataset and give me a full summary including data types, missing values, and key statistics.">
-        <div class="s-icon">📊</div>
-        <div class="s-title">Analyze my data</div>
-        <div class="s-desc">Full EDA: shape, nulls, distributions</div>
+    <div class="welcome-inner">
+      <h1><span>Ask your data anything.</span><span>It never leaves this computer.</span></h1>
+      <p class="lede">Attach a CSV or Excel file and ask in plain language. DataForge writes the Python, runs it, fixes its own errors, and shows you every step.</p>
+      <div class="welcome-actions">
+        <button class="btn primary" id="welcome-attach"><svg class="ic" aria-hidden="true"><use href="#i-paperclip"/></svg>Attach a dataset</button>
+        <span class="note">CSV, XLSX or XLS</span>
       </div>
-      <div class="suggestion-card" data-prompt="Plot the distribution of every numeric column using histograms. Explain the formula used.">
-        <div class="s-icon">📈</div>
-        <div class="s-title">Plot distributions</div>
-        <div class="s-desc">Charts for every numeric column</div>
-      </div>
-      <div class="suggestion-card" data-prompt="Find outliers in my dataset using the IQR method and explain the formula.">
-        <div class="s-icon">🔍</div>
-        <div class="s-title">Find outliers</div>
-        <div class="s-desc">IQR-based outlier detection</div>
-      </div>
-      <div class="suggestion-card" data-prompt="Generate Python code to clean missing values in my dataset. Explain each approach.">
-        <div class="s-icon">🧹</div>
-        <div class="s-title">Clean missing data</div>
-        <div class="s-desc">Code to handle nulls and gaps</div>
+      <div class="prompts-title">Or start from a question</div>
+      <div class="suggestion-grid">
+        <button class="suggestion-card" data-prompt="Analyze my dataset and give me a full summary including data types, missing values, and key statistics.">
+          <span class="s-title">Summarize the dataset<svg class="ic" aria-hidden="true"><use href="#i-caret-right"/></svg></span>
+          <span class="s-desc">Types, missing values, key statistics</span>
+        </button>
+        <button class="suggestion-card" data-prompt="Plot the distribution of every numeric column using histograms. Explain the formula used.">
+          <span class="s-title">Plot every distribution<svg class="ic" aria-hidden="true"><use href="#i-caret-right"/></svg></span>
+          <span class="s-desc">A histogram for each numeric column</span>
+        </button>
+        <button class="suggestion-card" data-prompt="Find outliers in my dataset using the IQR method and explain the formula.">
+          <span class="s-title">Find outliers<svg class="ic" aria-hidden="true"><use href="#i-caret-right"/></svg></span>
+          <span class="s-desc">Interquartile range, column by column</span>
+        </button>
+        <button class="suggestion-card" data-prompt="Generate Python code to clean missing values in my dataset. Explain each approach.">
+          <span class="s-title">Clean missing values<svg class="ic" aria-hidden="true"><use href="#i-caret-right"/></svg></span>
+          <span class="s-desc">Code for each gap, with the reasoning</span>
+        </button>
       </div>
     </div>
   </div>
 
   <!-- Conversation -->
-  <div id="conversation"></div>
+  <div id="conversation" aria-live="polite"></div>
 
-  <!-- Input -->
+  <!-- Composer -->
   <div id="input-area">
-    <div id="input-wrap">
-      <div id="attached-file">
-        <span>📎</span>
-        <span class="fname" id="attached-fname"></span>
-        <button id="remove-file" title="Remove">✕</button>
-      </div>
-      <textarea id="msg-input" rows="1" placeholder="Ask about your data, request a chart, or attach a file…"></textarea>
-      <div class="input-bottom">
-        <div class="input-left">
-          <button id="attach-btn" title="Attach CSV or Excel">📎</button>
-          <input type="file" id="file-input" accept=".csv,.xlsx,.xls" />
-          <select id="mode-select">
-            <option value="agent">🤖 Agent</option>
-            <option value="explain">💡 Explain</option>
-            <option value="code">📝 Code</option>
-            <option value="plot">📈 Plot</option>
-          </select>
+    <div class="cols">
+      <div id="input-wrap">
+        <div id="attached-file">
+          <svg class="ic" aria-hidden="true"><use href="#i-paperclip"/></svg>
+          <span class="fname" id="attached-fname"></span>
+          <button id="remove-file" title="Remove file" aria-label="Remove file"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
         </div>
-        <button id="send-btn" disabled title="Send">↑</button>
+        <textarea id="msg-input" rows="1" aria-label="Message" placeholder="Ask a question, request a chart, or attach a file"></textarea>
+        <div class="input-bottom">
+          <div class="input-left">
+            <button class="tool-btn" id="attach-btn" title="Attach a CSV or Excel file"><svg class="ic" aria-hidden="true"><use href="#i-paperclip"/></svg>Attach</button>
+            <button class="tool-btn" id="workspace-btn" title="Choose a folder the agent can browse and load files from"><svg class="ic" aria-hidden="true"><use href="#i-folder-open"/></svg>Workspace</button>
+            <input type="file" id="file-input" accept=".csv,.xlsx,.xls" />
+            <span class="divider" aria-hidden="true"></span>
+            <div class="modes" role="radiogroup" aria-label="Mode">
+              <input type="radio" name="mode" id="mode-agent" value="agent" checked /><label for="mode-agent" title="Plans, runs code, and fixes itself until it has an answer">Agent</label>
+              <input type="radio" name="mode" id="mode-explain" value="explain" /><label for="mode-explain" title="Explains without running code">Explain</label>
+              <input type="radio" name="mode" id="mode-code" value="code" /><label for="mode-code" title="Writes code for you to run">Code</label>
+              <input type="radio" name="mode" id="mode-plot" value="plot" /><label for="mode-plot" title="Writes plotting code">Plot</label>
+            </div>
+          </div>
+          <button id="send-btn" disabled title="Send (Enter)" aria-label="Send"><svg class="ic" aria-hidden="true"><use href="#i-arrow-up"/></svg></button>
+        </div>
       </div>
+      <div class="input-hint">Everything runs on this computer. Shift + Enter for a new line.</div>
     </div>
-    <div class="input-hint">DataForge runs fully locally — your data never leaves your machine</div>
   </div>
-</div>
+</main>
 
 <script>
 const API = "http://localhost:8000/api";
@@ -292,7 +682,19 @@ function loadDB() {
   try { return JSON.parse(localStorage.getItem("dataforge_db") || "null") || defaultDB(); }
   catch { return defaultDB(); }
 }
-function saveDB() { localStorage.setItem("dataforge_db", JSON.stringify(db)); }
+// `db` is always up to date in memory; only the (expensive, whole-DB) localStorage
+// write is debounced, so rapid-fire saves during a fast conversation don't each
+// re-serialize every project/chat/message on the main thread.
+let _saveTimer = null;
+function saveDB() {
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => localStorage.setItem("dataforge_db", JSON.stringify(db)), 400);
+}
+function flushDB() {
+  clearTimeout(_saveTimer);
+  localStorage.setItem("dataforge_db", JSON.stringify(db));
+}
+window.addEventListener("beforeunload", flushDB);
 function defaultDB() {
   return { projects: [{ id: uid(), name: "General", chats: [] }] };
 }
@@ -320,45 +722,200 @@ const fileInput    = document.getElementById("file-input");
 const attachedFile = document.getElementById("attached-file");
 const attachedFname= document.getElementById("attached-fname");
 const removeFile   = document.getElementById("remove-file");
-const modeSelect   = document.getElementById("mode-select");
 const newChatBtn   = document.getElementById("new-chat-btn");
-const newProjectBtn= document.getElementById("new-project-btn");
+const projectsLink = document.getElementById("projects-link");
+const projectsView = document.getElementById("projects-view");
+const projectView  = document.getElementById("project-view");
+const chatHeader   = document.getElementById("chat-header");
+const inputArea    = document.getElementById("input-area");
 const projectModal = document.getElementById("project-modal");
 const projectNameInput = document.getElementById("project-name-input");
+const projectDescInput = document.getElementById("project-desc-input");
+const DEFAULT_PLACEHOLDER = msgInput.placeholder;
 
-// ── Sidebar render ──
+// Mode is a segmented radio group; this keeps the old `modeSelect.value` API.
+const modeSelect = {
+  get value() { return document.querySelector('input[name="mode"]:checked')?.value || "agent"; },
+  set value(v) { const r = document.querySelector(`input[name="mode"][value="${v}"]`); if (r) r.checked = true; },
+};
+
+function icon(name, cls = "") {
+  return `<svg class="ic ${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+}
+
+// ── Views ──
+// welcome (empty chat), chat (conversation), projects (list), project (one project)
+state.view = "welcome";
+function showView(view) {
+  state.view = view;
+  welcome.style.display      = view === "welcome"  ? "block" : "none";
+  conversation.style.display = view === "chat"     ? "flex"  : "none";
+  conversation.style.flexDirection = "column";
+  chatHeader.style.display   = view === "chat"     ? "block" : "none";
+  projectsView.style.display = view === "projects" ? "block" : "none";
+  projectView.style.display  = view === "project"  ? "block" : "none";
+  inputArea.style.display    = view === "projects" ? "none"  : "block";
+  if (view !== "project") msgInput.placeholder = DEFAULT_PLACEHOLDER;
+  renderSidebar();
+}
+
+// ── Helpers for projects and chats ──
+function findProject(id) { return db.projects.find(p => p.id === id); }
+function chatTime(chat) { return chat.updatedAt || chat.createdAt || 0; }
+function projectTime(proj) { return Math.max(proj.createdAt || 0, ...proj.chats.map(chatTime)); }
+function usedChats(proj) { return proj.chats.filter(c => c.messages?.length); }
+function relTime(ts) {
+  if (!ts) return "";
+  const s = Math.round((Date.now() - ts) / 1000);
+  if (s < 60) return "Just now";
+  const m = Math.round(s / 60); if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60); if (h < 24) return `${h} hr ago`;
+  const d = Math.round(h / 24); if (d < 7) return d === 1 ? "Yesterday" : `${d} days ago`;
+  return new Date(ts).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+function plural(n, word) { return `${n} ${word}${n === 1 ? "" : "s"}`; }
+
+// ── Sidebar: Projects link + recent chats across every project ──
 function renderSidebar() {
+  projectsLink.classList.toggle("active", state.view === "projects" || state.view === "project");
+  document.getElementById("projects-count").textContent = db.projects.length;
+
   const list = document.getElementById("project-list");
   list.innerHTML = "";
-  db.projects.forEach(proj => {
-    const group = document.createElement("div");
-    group.className = "project-group";
+  const recents = [];
+  db.projects.forEach(proj => proj.chats.forEach((chat, i) => {
+    if (chat.messages?.length || chat.id === state.chatId) recents.push({ proj, chat, i });
+  }));
+  recents.sort((a, b) => (chatTime(b.chat) - chatTime(a.chat)) || (b.i - a.i));
 
-    const header = document.createElement("div");
-    header.className = "project-header" + (proj.id === state.projectId ? " open" : "");
-    header.innerHTML = `<span>▶ ${escHtml(proj.name)}</span><span class="chevron">▶</span>`;
-    header.addEventListener("click", () => {
-      state.projectId = proj.id;
-      header.classList.toggle("open");
-      chatsEl.classList.toggle("open");
-    });
-
-    const chatsEl = document.createElement("div");
-    chatsEl.className = "project-chats" + (proj.id === state.projectId ? " open" : "");
-
-    proj.chats.slice().reverse().forEach(chat => {
-      const item = document.createElement("div");
-      item.className = "chat-item" + (chat.id === state.chatId ? " active" : "");
-      item.innerHTML = `<span class="chat-dot"></span>${escHtml(chat.title || "Untitled chat")}`;
-      item.addEventListener("click", () => loadChat(proj.id, chat.id));
-      chatsEl.appendChild(item);
-    });
-
-    group.appendChild(header);
-    group.appendChild(chatsEl);
-    list.appendChild(group);
+  if (!recents.length) {
+    list.innerHTML = `<div class="project-empty">No chats yet</div>`;
+    return;
+  }
+  const showProject = db.projects.length > 1;
+  recents.slice(0, 50).forEach(({ proj, chat }) => {
+    const item = document.createElement("button");
+    const active = chat.id === state.chatId && state.view === "chat";
+    item.className = "chat-item" + (active ? " active" : "");
+    if (active) item.setAttribute("aria-current", "true");
+    const title = chat.title || "Untitled chat";
+    item.title = showProject ? `${title} (${proj.name})` : title;
+    item.innerHTML = escHtml(title) + (showProject ? `<span class="chat-proj">${escHtml(proj.name)}</span>` : "");
+    item.addEventListener("click", () => loadChat(proj.id, chat.id));
+    list.appendChild(item);
   });
 }
+
+// ── Chat header: project crumb + chat title ──
+function renderChatHeader() {
+  const proj = findProject(state.projectId);
+  const chat = proj?.chats.find(c => c.id === state.chatId);
+  const crumbs = document.getElementById("crumbs");
+  crumbs.innerHTML = `<button class="crumb">${escHtml(proj?.name || "Project")}</button><span class="crumb-sep">/</span><span class="crumb-title">${escHtml(chat?.title || "New chat")}</span>`;
+  crumbs.querySelector(".crumb").addEventListener("click", () => openProject(state.projectId));
+}
+
+// ── Projects list page ──
+function openProjects() {
+  renderProjectsView();
+  showView("projects");
+  projectsView.scrollTop = 0;
+}
+function renderProjectsView() {
+  const projects = db.projects.slice().sort((a, b) => projectTime(b) - projectTime(a));
+  projectsView.innerHTML = `
+    <div class="page-inner">
+      <div class="page-head">
+        <h1>Projects</h1>
+        <button class="btn primary" id="pv-new">${icon("plus")}New project</button>
+      </div>
+      <p class="page-lede">Keep chats about the same dataset or question together.</p>
+      <div class="list-title"><span>${plural(projects.length, "project")}</span><span>Last activity</span></div>
+      <div class="row-list" role="list"></div>
+    </div>`;
+  const list = projectsView.querySelector(".row-list");
+  projects.forEach(proj => {
+    const n = usedChats(proj).length;
+    const row = document.createElement("button");
+    row.className = "row"; row.setAttribute("role", "listitem");
+    row.innerHTML = `
+      <span class="row-name">${escHtml(proj.name)}<span class="row-sub">${escHtml(proj.description || "No description")}</span></span>
+      <span class="row-meta">${plural(n, "chat")}</span>
+      <span class="row-meta">${escHtml(relTime(projectTime(proj)) || "No activity")}</span>`;
+    row.addEventListener("click", () => openProject(proj.id));
+    list.appendChild(row);
+  });
+  projectsView.querySelector("#pv-new").addEventListener("click", () => openProjectModal("create"));
+}
+
+// ── Single project page ──
+function openProject(projectId) {
+  const proj = findProject(projectId);
+  if (!proj) return openProjects();
+  state.projectId = proj.id;
+  state.chatId = null;
+  state.messages = [];
+  state.file = null;
+  attachedFile.classList.remove("visible");
+  renderProjectView();
+  showView("project");
+  msgInput.placeholder = `Start a new chat in ${proj.name}`;
+  projectView.scrollTop = 0;
+}
+function renderProjectView() {
+  const proj = findProject(state.projectId);
+  if (!proj) return;
+  const chats = usedChats(proj).sort((a, b) => chatTime(b) - chatTime(a));
+  const onlyProject = db.projects.length === 1;
+  projectView.innerHTML = `
+    <div class="page-inner">
+      <button class="back-link" id="pj-back">${icon("caret-right")}All projects</button>
+      <h1>${escHtml(proj.name)}</h1>
+      <p class="page-lede${proj.description ? "" : " empty"}">${escHtml(proj.description || "No description yet.")}</p>
+      <div class="page-actions">
+        <button class="btn sm" id="pj-edit">Edit details</button>
+        <button class="btn sm danger" id="pj-delete" ${onlyProject ? 'disabled title="You need at least one project"' : ""}>Delete project</button>
+      </div>
+      <div class="confirm-row" id="pj-confirm" hidden>
+        <span>Delete ${escHtml(proj.name)} and its ${plural(chats.length, "chat")}? This can't be undone.</span>
+        <button class="btn sm danger-fill" id="pj-confirm-yes">Delete</button>
+        <button class="btn sm quiet" id="pj-confirm-no">Keep it</button>
+      </div>
+      <div class="list-title"><span>${plural(chats.length, "chat")}</span><span>Last activity</span></div>
+      <div class="row-list" role="list"></div>
+    </div>`;
+  const list = projectView.querySelector(".row-list");
+  if (!chats.length) {
+    list.innerHTML = `<div class="row-empty">No chats yet. Ask something below to start the first one.</div>`;
+  }
+  chats.forEach(chat => {
+    const row = document.createElement("button");
+    row.className = "row"; row.setAttribute("role", "listitem");
+    const turns = chat.messages.filter(m => m.role === "user").length;
+    row.innerHTML = `
+      <span class="row-name">${escHtml(chat.title || "Untitled chat")}${chat.file?.name ? `<span class="row-sub">${escHtml(chat.file.name)}</span>` : ""}</span>
+      <span class="row-meta">${plural(turns, "message")}</span>
+      <span class="row-meta">${escHtml(relTime(chatTime(chat)))}</span>`;
+    row.addEventListener("click", () => loadChat(proj.id, chat.id));
+    list.appendChild(row);
+  });
+  const confirmRow = projectView.querySelector("#pj-confirm");
+  projectView.querySelector("#pj-back").addEventListener("click", openProjects);
+  projectView.querySelector("#pj-edit").addEventListener("click", () => openProjectModal("edit", proj));
+  projectView.querySelector("#pj-delete").addEventListener("click", () => { confirmRow.hidden = false; projectView.querySelector("#pj-confirm-no").focus(); });
+  projectView.querySelector("#pj-confirm-no").addEventListener("click", () => { confirmRow.hidden = true; });
+  projectView.querySelector("#pj-confirm-yes").addEventListener("click", () => deleteProject(proj.id));
+}
+function deleteProject(projectId) {
+  if (db.projects.length === 1) return;
+  db.projects = db.projects.filter(p => p.id !== projectId);
+  saveDB();
+  state.projectId = db.projects[0].id;
+  state.chatId = null;
+  openProjects();
+}
+
+projectsLink.addEventListener("click", openProjects);
 
 // ── Load a past chat ──
 function loadChat(projectId, chatId) {
@@ -372,12 +929,10 @@ function loadChat(projectId, chatId) {
   state.file      = chat.file || null;
 
   conversation.innerHTML = "";
-  welcome.style.display = "none";
-  conversation.style.display = "flex";
-  conversation.style.flexDirection = "column";
+  showView("chat");
+  renderChatHeader();
 
   state.messages.forEach(msg => replayMessage(msg));
-  renderSidebar();
   scrollBottom();
 }
 
@@ -402,18 +957,17 @@ function saveCurrentChat() {
   if (!chat) return;
   chat.messages = state.messages;
   chat.file = state.file ? { name: state.file.name, profile: state.file.profile } : null;
+  chat.updatedAt = Date.now();
   saveDB();
+  renderSidebar();
 }
 
 // ── New chat ──
-function startNewChat() {
-  const chatId = uid();
-  const proj = db.projects.find(p => p.id === state.projectId) || db.projects[0];
-  const chat = { id: chatId, title: "New chat", messages: [], file: null };
-  proj.chats.push(chat);
-  saveDB();
-
-  state.chatId   = chatId;
+// Resets to an empty chat; the chat record is only created when the first
+// message is sent, so abandoned "New chat" entries never pile up.
+function startNewChat(projectId = db.projects[0].id) {
+  state.projectId = findProject(projectId) ? projectId : db.projects[0].id;
+  state.chatId   = null;
   state.messages = [];
   state.file     = null;
   state.streaming = false;
@@ -423,44 +977,74 @@ function startNewChat() {
   msgInput.style.height = "auto";
   sendBtn.disabled = true;
   conversation.innerHTML = "";
-  welcome.style.display = "flex";
-  conversation.style.display = "none";
-
-  renderSidebar();
+  showView("welcome");
+}
+function createChatRecord() {
+  const proj = findProject(state.projectId) || db.projects[0];
+  state.projectId = proj.id;
+  const now = Date.now();
+  const chat = { id: uid(), title: "New chat", messages: [], file: null, createdAt: now, updatedAt: now };
+  proj.chats.push(chat);
+  state.chatId = chat.id;
+  state.messages = [];
+  conversation.innerHTML = "";
+  saveDB();
 }
 
-newChatBtn.addEventListener("click", startNewChat);
+newChatBtn.addEventListener("click", () => startNewChat());
 
-// ── New project modal ──
-newProjectBtn.addEventListener("click", () => {
-  projectNameInput.value = "";
+// ── Project modal (create or edit) ──
+let modalMode = "create", modalProject = null, modalReturnFocus = null;
+function openProjectModal(mode, proj = null) {
+  modalMode = mode; modalProject = proj;
+  modalReturnFocus = document.activeElement;
+  document.getElementById("project-modal-title").textContent = mode === "edit" ? "Edit project" : "New project";
+  document.getElementById("modal-create").textContent = mode === "edit" ? "Save changes" : "Create project";
+  projectNameInput.value = proj?.name || "";
+  projectDescInput.value = proj?.description || "";
   projectModal.style.display = "flex";
   setTimeout(() => projectNameInput.focus(), 50);
-});
-document.getElementById("modal-cancel").addEventListener("click", () => { projectModal.style.display = "none"; });
-document.getElementById("modal-create").addEventListener("click", createProject);
-projectNameInput.addEventListener("keydown", e => { if (e.key === "Enter") createProject(); });
+}
+function closeProjectModal() {
+  projectModal.style.display = "none";
+  modalReturnFocus?.focus?.();
+}
+document.getElementById("modal-cancel").addEventListener("click", closeProjectModal);
+document.getElementById("modal-create").addEventListener("click", saveProjectModal);
+projectNameInput.addEventListener("keydown", e => { if (e.key === "Enter") saveProjectModal(); });
+projectModal.addEventListener("keydown", e => { if (e.key === "Escape") closeProjectModal(); });
+projectModal.addEventListener("click", e => { if (e.target === projectModal) closeProjectModal(); });
 
-function createProject() {
+function saveProjectModal() {
   const name = projectNameInput.value.trim();
-  if (!name) return;
-  const proj = { id: uid(), name, chats: [] };
+  if (!name) { projectNameInput.focus(); return; }
+  const description = projectDescInput.value.trim();
+  if (modalMode === "edit" && modalProject) {
+    modalProject.name = name;
+    modalProject.description = description;
+    saveDB();
+    projectModal.style.display = "none";
+    renderProjectView();
+    renderSidebar();
+    msgInput.placeholder = `Start a new chat in ${name}`;
+    return;
+  }
+  const proj = { id: uid(), name, description, chats: [], createdAt: Date.now() };
   db.projects.push(proj);
   saveDB();
-  state.projectId = proj.id;
   projectModal.style.display = "none";
-  renderSidebar();
-  startNewChat();
+  openProject(proj.id);
 }
 
 // ── Suggestion cards ──
 document.querySelectorAll(".suggestion-card").forEach(card => {
   card.addEventListener("click", () => {
     msgInput.value = card.dataset.prompt;
-    updateSendBtn();
+    msgInput.dispatchEvent(new Event("input"));
     msgInput.focus();
   });
 });
+document.getElementById("welcome-attach").addEventListener("click", () => fileInput.click());
 
 // ── Input ──
 function updateSendBtn() {
@@ -502,6 +1086,7 @@ function setFile(file) {
   reader.onload = e => { if (state.file) state.file.csvRaw = e.target.result; };
   reader.readAsText(file);
   updateSendBtn();
+  msgInput.focus();
 }
 
 // ── Submit ──
@@ -510,13 +1095,11 @@ async function submit() {
   const text = msgInput.value.trim();
   if (!text && !state.file) return;
 
-  // Create a chat if this is the first message
-  if (!state.chatId) startNewChat();
+  // Create the chat record on the first message (in the current project)
+  if (!state.chatId) createChatRecord();
 
   // Show conversation
-  welcome.style.display = "none";
-  conversation.style.display = "flex";
-  conversation.style.flexDirection = "column";
+  showView("chat");
 
   const userMsg = { role: "user", text, filename: state.file?.name || null };
   state.messages.push(userMsg);
@@ -529,11 +1112,12 @@ async function submit() {
   // Update chat title from first message
   const proj = db.projects.find(p => p.id === state.projectId);
   const chat = proj?.chats.find(c => c.id === state.chatId);
-  if (chat && chat.title === "New chat" && text) {
-    chat.title = text.slice(0, 40);
+  if (chat && chat.title === "New chat" && (text || state.file?.name)) {
+    chat.title = (text || state.file.name).slice(0, 40);
     saveDB();
     renderSidebar();
   }
+  renderChatHeader();
 
   const fileToUpload = state.file?.fileObj || null;
   const fileRef = state.file ? { ...state.file } : null;
@@ -546,7 +1130,7 @@ async function submit() {
   // Upload + EDA
   if (fileToUpload) {
     const edaTurn = addAssistantTurn();
-    showTyping(edaTurn);
+    showTyping(edaTurn, "Reading the file");
     try {
       const form = new FormData();
       form.append("file", fileToUpload);
@@ -565,7 +1149,7 @@ async function submit() {
       if (text) await sendChat(text, state.file, modeSelect.value);
     } catch (e) {
       hideTyping(edaTurn);
-      appendText(edaTurn, `⚠️ Error: ${e.message}`);
+      appendError(edaTurn, `Couldn't read ${fileToUpload.name}: ${e.message}`);
     }
     return;
   }
@@ -596,7 +1180,7 @@ async function sendChat(text, fileRef, mode) {
     saveCurrentChat();
   } catch (e) {
     hideTyping(assistantTurn);
-    appendText(assistantTurn, `⚠️ ${e.message}`);
+    appendError(assistantTurn, `No answer from the local model: ${e.message}`);
   } finally {
     state.streaming = false;
     updateSendBtn();
@@ -609,10 +1193,33 @@ function smallCsvFallback(fileRef) {
   return csv.length < 2_000_000 ? csv : "";
 }
 
+// ── Workspace folder (agent can browse/load files from it) ──
+document.getElementById("workspace-btn").addEventListener("click", async () => {
+  const current = await fetch(`${API}/agent/workspace`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path: "" }),
+  }).then(r => r.json()).catch(() => ({}));
+
+  const path = prompt(
+    "Folder the agent may browse and load data files from:",
+    current.path || "C:\\Users\\"
+  );
+  if (!path) return;
+
+  const res = await fetch(`${API}/agent/workspace`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path }),
+  }).then(r => r.json()).catch(e => ({ error: e.message }));
+
+  const turn = addAssistantTurn();
+  if (res.error) appendError(turn, `Couldn't use that folder: ${res.error}`);
+  else appendText(turn, `Workspace set to ${res.path}. ${res.files} data files found. Try "list my files" or "load sales.csv and analyze it".`);
+});
+
 // ── Agent mode: SSE loop with live steps ──
 async function sendAgent(text, fileRef) {
   const turn = addAssistantTurn();
-  showTyping(turn);
+  showTyping(turn, "Planning");
   state.streaming = true;
 
   try {
@@ -651,37 +1258,51 @@ async function sendAgent(text, fileRef) {
 
         if (ev === "start") {
           state.agentSessionId = data.session_id;
+          showTyping(turn, "Planning");
         } else if (ev === "code") {
           currentStep = addAgentStep(turn, data.step, data.code);
         } else if (ev === "result") {
           finishAgentStep(currentStep, data);
+          showTyping(turn, data.error ? "Revising the code" : "Thinking about the next step");
         } else if (ev === "final") {
           renderAssistantContent(turn, data.content || "", fileRef || state.file);
           state.messages.push({ role: "assistant", text: data.content || "" });
           saveCurrentChat();
         } else if (ev === "error") {
-          appendText(turn, `⚠️ ${data.message}`);
+          appendError(turn, data.message);
         }
         scrollBottom();
       }
     }
   } catch (e) {
     hideTyping(turn);
-    appendText(turn, `⚠️ ${e.message}`);
+    appendError(turn, `The agent stopped: ${e.message}`);
   } finally {
+    hideTyping(turn);
     state.streaming = false;
     updateSendBtn();
   }
 }
 
+function stepsContainer(turn) {
+  let list = turn.querySelector(":scope > .agent-steps");
+  if (!list) {
+    list = document.createElement("div");
+    list.className = "agent-steps";
+    turn.appendChild(list);
+  }
+  return list;
+}
+
 function addAgentStep(turn, step, code) {
   const el = document.createElement("div");
   el.className = "agent-step";
+  el.dataset.step = step;
   el.innerHTML = `
-    <div class="agent-step-label"><span class="spin">⟳</span> Step ${step} — running code…</div>
-    <details><summary>show code</summary></details>`;
+    <div class="agent-step-label">${icon("circle-notch", "spin")}<span>Step ${escHtml(step)}</span><span class="state">Running code</span></div>
+    <details><summary>${icon("caret-right")}Code</summary></details>`;
   el.querySelector("details").appendChild(buildCodeBlock("python", code, state.file));
-  turn.appendChild(el);
+  stepsContainer(turn).appendChild(el);
   scrollBottom();
   return el;
 }
@@ -689,14 +1310,15 @@ function addAgentStep(turn, step, code) {
 function finishAgentStep(stepEl, data) {
   if (!stepEl) return;
   const label = stepEl.querySelector(".agent-step-label");
+  const n = escHtml(stepEl.dataset.step || "");
   if (data.error) {
     label.classList.add("error");
-    label.innerHTML = "⚠ Hit an error — fixing and retrying…";
+    label.innerHTML = `${icon("warning")}<span>Step ${n}</span><span class="state">Hit an error, revising the code</span>`;
     const details = document.createElement("details");
-    details.innerHTML = `<summary>show error</summary><pre class="code-content" style="white-space:pre-wrap">${escHtml(data.error)}</pre>`;
+    details.innerHTML = `<summary>${icon("caret-right")}Error</summary><pre class="code-content wrap">${escHtml(data.error)}</pre>`;
     stepEl.appendChild(details);
   } else {
-    label.innerHTML = "✓ Step complete";
+    label.innerHTML = `${icon("check")}<span>Step ${n}</span><span class="state">Done</span>`;
     renderExecutionResult(stepEl, data);
   }
   scrollBottom();
@@ -705,9 +1327,9 @@ function finishAgentStep(stepEl, data) {
 // ── DOM helpers ──
 function addUserTurn(text, filename) {
   const turn = document.createElement("div");
-  turn.className = "turn";
-  turn.innerHTML = `<div class="role-label user"><div class="role-avatar user">F</div> You</div>
-    ${filename ? `<div class="file-chip"><span class="chip-accent">📎</span> ${escHtml(filename)}</div>` : ""}
+  turn.className = "turn user";
+  turn.innerHTML = `<div class="role-label user">You</div>
+    ${filename ? `<div class="file-chip">${icon("paperclip")}${escHtml(filename)}</div>` : ""}
     ${text ? `<div class="msg-body user-body">${escHtml(text)}</div>` : ""}`;
   conversation.appendChild(turn);
   scrollBottom();
@@ -716,58 +1338,83 @@ function addUserTurn(text, filename) {
 
 function addAssistantTurn() {
   const turn = document.createElement("div");
-  turn.className = "turn";
-  turn.innerHTML = `<div class="role-label assistant"><div class="role-avatar assistant">D</div> DataForge</div>`;
+  turn.className = "turn assistant";
+  turn.innerHTML = `<div class="role-label assistant">DataForge</div>`;
   conversation.appendChild(turn);
   scrollBottom();
   return turn;
 }
 
-function showTyping(turn) {
+function showTyping(turn, label = "Thinking") {
+  hideTyping(turn);
   const t = document.createElement("div");
   t.className = "typing"; t.dataset.typing = "1";
-  t.innerHTML = "<span></span><span></span><span></span>";
+  t.setAttribute("role", "status");
+  t.innerHTML = `<span class="think-grid" aria-hidden="true">${"<i></i>".repeat(9)}</span>` +
+    `<span class="think-label">${escHtml(label)}</span><span class="think-time"></span><span class="think-note"></span>`;
+  // Live elapsed counter: visible proof the local model is still working.
+  const time = t.querySelector(".think-time"), note = t.querySelector(".think-note"), start = Date.now();
+  t._timer = setInterval(() => {
+    const sec = Math.floor((Date.now() - start) / 1000);
+    time.textContent = "for " + (sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)} min ${sec % 60}s`);
+    note.textContent =
+      sec >= 180 ? "Still going. Big datasets and the larger model can take several minutes." :
+      sec >= 60  ? `Still working, ${Math.floor(sec / 60)} min so far. The local model is slower than cloud AI.` :
+      sec >= 20  ? "Still working. Local models take a little longer." : "";
+  }, 1000);
   turn.appendChild(t); scrollBottom();
 }
-function hideTyping(turn) { turn.querySelectorAll("[data-typing]").forEach(e => e.remove()); }
+function hideTyping(turn) {
+  turn.querySelectorAll("[data-typing]").forEach(e => { clearInterval(e._timer); e.remove(); });
+}
 
 function appendText(turn, text) {
   const p = document.createElement("div");
   p.className = "msg-body"; p.textContent = text;
   turn.appendChild(p); scrollBottom();
 }
+function appendError(turn, text) {
+  const p = document.createElement("div");
+  p.className = "msg-body error-text"; p.setAttribute("role", "alert");
+  p.textContent = text;
+  turn.appendChild(p); scrollBottom();
+}
+
+function pct(part, whole) {
+  if (!whole) return "0%";
+  const v = (part / whole) * 100;
+  if (v === 0) return "0%";
+  if (v < 0.1) return "under 0.1%";
+  return (v < 10 ? v.toFixed(1) : Math.round(v)) + "%";
+}
 
 // ── EDA inline ──
 function renderEdaResponse(turn, profile, filename, fileObj) {
-  const intro = document.createElement("div");
-  intro.className = "msg-body";
-  intro.textContent = `I've analyzed ${escHtml(filename || "your file")}. Here's what I found:`;
-  turn.appendChild(intro);
-
-  const cards = document.createElement("div");
-  cards.className = "eda-cards";
-  const totalNulls = profile.columns.reduce((a,c) => a + c.null_count, 0);
-  cards.innerHTML = `
-    <div class="eda-stat"><div class="label">Rows</div><div class="value">${profile.shape.rows.toLocaleString()}</div></div>
-    <div class="eda-stat"><div class="label">Columns</div><div class="value">${profile.shape.cols}</div></div>
-    <div class="eda-stat"><div class="label">Duplicates</div><div class="value">${profile.duplicates}</div></div>
-    <div class="eda-stat"><div class="label">Missing</div><div class="value">${totalNulls.toLocaleString()}</div></div>
-  `;
-  turn.appendChild(cards);
-
   const numeric = profile.columns.filter(c => c.kind === "numeric");
   const categ   = profile.columns.filter(c => c.kind === "categorical");
-  const summary = document.createElement("div");
-  summary.className = "msg-body";
-  summary.style.marginTop = "6px";
-  summary.textContent = `${numeric.length} numeric and ${categ.length} categorical columns. Ask me anything — or click Auto Analyze to clean the data and generate all plots automatically.`;
-  turn.appendChild(summary);
+  const rows = profile.shape.rows, cols = profile.shape.cols;
+  const totalNulls = profile.columns.reduce((a,c) => a + c.null_count, 0);
+
+  const intro = document.createElement("div");
+  intro.className = "msg-body";
+  intro.textContent = `Profile of ${filename || "your file"}.`;
+  turn.appendChild(intro);
+
+  const readings = document.createElement("div");
+  readings.className = "profile";
+  readings.innerHTML = `
+    <div class="reading"><div class="value">${rows.toLocaleString()}</div><div class="label">Rows</div><div class="ctx">${profile.duplicates.toLocaleString()} duplicated</div></div>
+    <div class="reading"><div class="value">${cols}</div><div class="label">Columns</div><div class="ctx">${numeric.length} numeric, ${categ.length} categorical</div></div>
+    <div class="reading"><div class="value">${totalNulls.toLocaleString()}</div><div class="label">Missing values</div><div class="ctx">${pct(totalNulls, rows * cols)} of all cells</div></div>
+    <div class="reading"><div class="value">${profile.duplicates.toLocaleString()}</div><div class="label">Duplicate rows</div><div class="ctx">${pct(profile.duplicates, rows)} of rows</div></div>
+  `;
+  turn.appendChild(readings);
 
   // Plot suggestions
   if (numeric.length > 0) {
     const suggestLabel = document.createElement("div");
-    suggestLabel.className = "plot-section-title";
-    suggestLabel.textContent = "Suggested plots";
+    suggestLabel.className = "section-title";
+    suggestLabel.textContent = "Suggested charts";
     turn.appendChild(suggestLabel);
 
     const suggestions = buildPlotSuggestions(numeric, categ);
@@ -780,7 +1427,7 @@ function renderEdaResponse(turn, profile, filename, fileObj) {
       chip.addEventListener("click", () => {
         msgInput.value = s;
         modeSelect.value = "plot";
-        updateSendBtn();
+        msgInput.dispatchEvent(new Event("input"));
         msgInput.focus();
       });
       chips.appendChild(chip);
@@ -789,17 +1436,25 @@ function renderEdaResponse(turn, profile, filename, fileObj) {
   }
 
   // Auto Analyze button
+  const row = document.createElement("div");
+  row.className = "auto-row";
   const autoBtn = document.createElement("button");
-  autoBtn.className = "auto-btn";
-  autoBtn.innerHTML = "🔬 Auto Analyze — clean data + generate all plots";
+  autoBtn.className = "btn primary";
+  autoBtn.innerHTML = "Auto analyze";
+  const note = document.createElement("span");
+  note.className = "note";
+  note.textContent = fileObj ? "Cleans the data and generates every chart." : "Attach the file again to auto analyze it.";
+  if (!fileObj) autoBtn.disabled = true;
   autoBtn.addEventListener("click", async () => {
     if (!fileObj) return;
     autoBtn.disabled = true;
-    autoBtn.innerHTML = '<span style="animation:spin .7s linear infinite;display:inline-block">⟳</span> Analyzing…';
+    autoBtn.innerHTML = `${icon("circle-notch", "spin")}Analyzing`;
     await runAutoAnalyze(fileObj, filename);
-    autoBtn.remove();
+    row.remove();
   });
-  turn.appendChild(autoBtn);
+  row.appendChild(autoBtn);
+  row.appendChild(note);
+  turn.appendChild(row);
 
   scrollBottom();
 }
@@ -823,7 +1478,7 @@ function buildPlotSuggestions(numeric, categ) {
 // ── Auto Analyze ──
 async function runAutoAnalyze(fileObj, filename) {
   const resultTurn = addAssistantTurn();
-  showTyping(resultTurn);
+  showTyping(resultTurn, "Cleaning and charting");
 
   try {
     const form = new FormData();
@@ -838,7 +1493,7 @@ async function runAutoAnalyze(fileObj, filename) {
     saveCurrentChat();
   } catch (e) {
     hideTyping(resultTurn);
-    appendText(resultTurn, `⚠️ ${e.message}`);
+    appendError(resultTurn, `Auto analyze failed: ${e.message}`);
   }
 }
 
@@ -846,21 +1501,26 @@ function renderAutoAnalyzeResult(turn, data) {
   // Cleaning report
   const cleanTitle = document.createElement("div");
   cleanTitle.className = "msg-body";
-  cleanTitle.innerHTML = `<strong>🧹 Auto-Clean Report</strong> — ${data.cleaned_shape.rows.toLocaleString()} rows × ${data.cleaned_shape.cols} columns after cleaning`;
+  cleanTitle.innerHTML = `<strong>Cleaning report.</strong> ${data.cleaned_shape.rows.toLocaleString()} rows and ${data.cleaned_shape.cols} columns after cleaning.`;
   turn.appendChild(cleanTitle);
 
+  const list = document.createElement("div");
+  list.className = "clean-list";
   data.cleaning_report.forEach(step => {
     const el = document.createElement("div");
-    el.className = "cleaning-step";
+    el.className = "clean-row";
     el.innerHTML = `<span class="step-title">${escHtml(step.step)}</span><span class="step-detail">${escHtml(step.detail)}</span>`;
-    turn.appendChild(el);
+    list.appendChild(el);
   });
+  turn.appendChild(list);
 
   // Download cleaned CSV
   if (data.cleaned_csv_b64) {
     const dlBtn = document.createElement("button");
-    dlBtn.className = "download-btn";
-    dlBtn.innerHTML = "⬇ Download cleaned CSV";
+    dlBtn.className = "btn sm";
+    dlBtn.style.justifySelf = "start";
+    dlBtn.style.marginTop = "12px";
+    dlBtn.innerHTML = `${icon("download-simple")}Download cleaned CSV`;
     dlBtn.addEventListener("click", () => {
       const bytes = atob(data.cleaned_csv_b64);
       const blob  = new Blob([bytes], { type: "text/csv" });
@@ -875,30 +1535,32 @@ function renderAutoAnalyzeResult(turn, data) {
   // Plots
   if (data.plots?.length) {
     const plotsTitle = document.createElement("div");
-    plotsTitle.className = "plot-section-title";
-    plotsTitle.style.marginTop = "16px";
-    plotsTitle.textContent = `📊 Auto-Generated Plots (${data.plots.length})`;
+    plotsTitle.className = "section-title";
+    plotsTitle.style.marginTop = "28px";
+    plotsTitle.textContent = `${data.plots.length} charts`;
     turn.appendChild(plotsTitle);
 
     data.plots.forEach(plot => {
+      const fig = document.createElement("div");
+      fig.className = "figure";
       const pTitle = document.createElement("div");
-      pTitle.className = "msg-body";
-      pTitle.style.fontWeight = "600";
-      pTitle.style.marginTop = "12px";
+      pTitle.className = "figure-title";
       pTitle.textContent = plot.title;
-      turn.appendChild(pTitle);
+      fig.appendChild(pTitle);
 
       if (plot.formula) {
         const formula = document.createElement("div");
         formula.className = "plot-formula";
-        formula.textContent = "Formula: " + plot.formula;
-        turn.appendChild(formula);
+        formula.textContent = plot.formula;
+        fig.appendChild(formula);
       }
 
       const img = document.createElement("img");
       img.className = "inline-chart";
+      img.alt = plot.title || "Chart";
       img.src = "data:image/png;base64," + plot.chart;
-      turn.appendChild(img);
+      fig.appendChild(img);
+      turn.appendChild(fig);
     });
   }
 
@@ -910,7 +1572,7 @@ function renderAssistantContent(turn, text, fileRef) {
   splitByCodeBlocks(text).forEach(part => {
     if (part.type === "text" && part.content.trim()) {
       const p = document.createElement("div");
-      p.className = "msg-body"; p.textContent = part.content;
+      p.className = "msg-body"; p.textContent = part.content.trim();
       turn.appendChild(p);
     } else if (part.type === "code") {
       turn.appendChild(buildCodeBlock(part.lang, part.content, fileRef));
@@ -938,16 +1600,16 @@ function buildCodeBlock(lang, code, fileRef) {
     <div class="code-header">
       <span class="code-lang">${escHtml(lang)}</span>
       <div class="code-actions">
-        <button class="code-btn copy-btn">Copy</button>
-        <button class="code-btn run run-btn">▶ Run</button>
+        <button class="code-btn copy-btn">${icon("copy")}<span>Copy</span></button>
+        <button class="code-btn run run-btn">${icon("play")}<span>Run</span></button>
       </div>
     </div>
     <pre class="code-content"><code>${escHtml(code)}</code></pre>`;
   wrap.querySelector(".copy-btn").onclick = () => {
     navigator.clipboard.writeText(code);
-    const btn = wrap.querySelector(".copy-btn");
-    btn.textContent = "Copied!";
-    setTimeout(() => btn.textContent = "Copy", 1500);
+    const label = wrap.querySelector(".copy-btn span");
+    label.textContent = "Copied";
+    setTimeout(() => label.textContent = "Copy", 1500);
   };
   wrap.querySelector(".run-btn").onclick = () => {
     runCode(code, smallCsvFallback(fileRef), fileRef?.datasetId || state.file?.datasetId || "");
@@ -958,7 +1620,7 @@ function buildCodeBlock(lang, code, fileRef) {
 // ── Run code ──
 async function runCode(code, csvRaw, datasetId = "") {
   const resultTurn = addAssistantTurn();
-  showTyping(resultTurn);
+  showTyping(resultTurn, "Running");
   try {
     const res = await fetch(`${API}/execute/`, {
       method: "POST",
@@ -974,36 +1636,41 @@ async function runCode(code, csvRaw, datasetId = "") {
     saveCurrentChat();
   } catch (e) {
     hideTyping(resultTurn);
-    appendText(resultTurn, `⚠️ ${e.message}`);
+    appendError(resultTurn, `The code didn't run: ${e.message}`);
   }
 }
 
+const NUMERIC_RE = /^-?[\d,]*\.?\d+(e[-+]?\d+)?%?$/i;
 function renderExecutionResult(turn, data) {
-  if (data.chart) {
+  const charts = data.charts || (data.chart ? [data.chart] : []);
+  charts.forEach(chart => {
     const img = document.createElement("img");
     img.className = "inline-chart";
-    img.src = "data:image/png;base64," + data.chart;
+    img.loading = "lazy";
+    img.alt = "Chart generated by the code";
+    img.src = "data:image/png;base64," + chart;
     turn.appendChild(img);
-  }
+  });
   if (data.table?.length) {
     const keys = Object.keys(data.table[0]);
+    const isNum = v => typeof v === "number" || (typeof v === "string" && NUMERIC_RE.test(v.trim()));
     const wrap = document.createElement("div");
     wrap.className = "inline-table-wrap";
     wrap.innerHTML = `<table class="inline-table">
-      <thead><tr>${keys.map(k=>`<th>${escHtml(k)}</th>`).join("")}</tr></thead>
-      <tbody>${data.table.map(row=>`<tr>${keys.map(k=>`<td>${escHtml(String(row[k]))}</td>`).join("")}</tr>`).join("")}</tbody>
+      <thead><tr>${keys.map(k=>`<th${isNum(data.table[0][k]) ? ' class="num"' : ""}>${escHtml(k)}</th>`).join("")}</tr></thead>
+      <tbody>${data.table.map(row=>`<tr>${keys.map(k=>`<td${isNum(row[k]) ? ' class="num"' : ""}>${escHtml(String(row[k]))}</td>`).join("")}</tr>`).join("")}</tbody>
     </table>`;
     turn.appendChild(wrap);
   }
   if (data.stdout) {
-    const pre = document.createElement("div");
-    pre.className = "msg-body";
-    pre.style.cssText = "font-family:monospace;color:var(--success);";
-    pre.textContent = data.stdout;
-    turn.appendChild(pre);
+    const out = document.createElement("div");
+    out.className = "output";
+    out.innerHTML = `<div class="output-label">Output</div><pre></pre>`;
+    out.querySelector("pre").textContent = data.stdout;
+    turn.appendChild(out);
   }
-  if (!data.chart && !data.table && !data.stdout) {
-    appendText(turn, "✓ Code ran successfully with no output.");
+  if (!charts.length && !data.table?.length && !data.stdout) {
+    appendText(turn, "The code ran and printed nothing.");
   }
   scrollBottom();
 }
@@ -1013,13 +1680,43 @@ function buildContext(profile) {
   if (!profile) return null;
   return `Rows: ${profile.shape.rows} | Columns: ${profile.columns.map(c=>`${c.name}(${c.dtype})`).join(", ")}`;
 }
-function scrollBottom() { conversation.scrollTop = conversation.scrollHeight; }
+// Coalesce bursts of scroll requests (e.g. every SSE event in the agent loop)
+// into one scroll per animation frame instead of one forced-reflow per call.
+let _scrollQueued = false;
+function scrollBottom() {
+  if (_scrollQueued) return;
+  _scrollQueued = true;
+  requestAnimationFrame(() => {
+    conversation.scrollTop = conversation.scrollHeight;
+    _scrollQueued = false;
+  });
+}
 function escHtml(s) {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
+// ── Local model status (Electron only — no-op in a plain browser tab) ──
+const modelBanner = document.getElementById("model-banner");
+window.dataforge?.onModelStatus?.(status => {
+  modelBanner.classList.toggle("error", status.state === "error");
+  if (status.state === "ready") {
+    modelBanner.style.display = "none";
+    return;
+  }
+  modelBanner.style.display = "flex";
+  const messages = {
+    checking: "Checking the local AI model",
+    pulling: `Downloading the local AI model (${status.model}). First launch only; this can take a few minutes.`,
+    error: `Couldn't set up the local AI model (${status.model}). Install Ollama, then restart DataForge.`,
+  };
+  const ic = status.state === "error" ? icon("warning") : icon("circle-notch", "spin");
+  modelBanner.innerHTML = `${ic}<span>${escHtml(messages[status.state] || status.state)}</span>` +
+    (status.detail ? `<span class="detail">${escHtml(status.detail)}</span>` : "");
+});
+if (window.dataforge?.version) document.getElementById("app-version").textContent = "v" + window.dataforge.version;
+
 // ── Init ──
-renderSidebar();
+showView("welcome");
 </script>
 </body>
 </html>

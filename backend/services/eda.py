@@ -65,7 +65,10 @@ def is_id_column(s: pd.Series, name) -> bool:
         return False
     if _ID_HINTS.search(str(name)):
         return True
-    return bool(pd.api.types.is_integer_dtype(s) and s.is_monotonic_increasing and s.nunique() == n)
+    # Unnamed: only a true row counter (steps of exactly 1). Merely unique and
+    # increasing is just as likely a real feature in data sorted by it.
+    return bool(pd.api.types.is_integer_dtype(s) and s.nunique() == n
+                and (s.diff().dropna() == 1).all())
 
 
 def find_date_column(df: pd.DataFrame) -> str | None:

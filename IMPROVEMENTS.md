@@ -84,6 +84,16 @@ JSON as its "final answer" and ran nothing. The agent now recovers:
 Unknown tools get a corrective message instead of a bare "unknown tool".
 Live result: "Predict churn" now trains the model and answers with real metrics.
 
+### 2026-09-27 — Notebook-style output; real feature importances
+The sandbox now echoes a trailing expression the way a notebook cell does:
+`df.head()` or `df.groupby(...).mean()` alone used to print nothing, so the model
+saw empty output and repeated itself. A trailing DataFrame also becomes the result
+table. `train_model` prints its top-5 feature importances as text. Before, the
+model could only guess them from a chart it can't see, and it did guess, wrongly.
+Also tightened ID detection: an unnamed column now needs to be an exact +1 row
+counter, since a sorted unique feature was being dropped as an "ID".
+Live: "churn rate per plan" answered 57.69/41.41/44.22%, matching pandas exactly.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a
@@ -91,5 +101,3 @@ Live result: "Predict churn" now trains the model and answers with real metrics.
 - A bare `except:` in generated code can still catch the timeout.
 - `/api/upload` reads the whole file into memory with no size limit.
 - Recommendations could offer "one-click run" instead of just filling the input.
-- Sandbox should echo the last expression like a notebook (`df.head()` alone prints nothing).
-- `train_model` should print top feature importances; right now the model can only guess them from a chart it cannot see.

@@ -71,3 +71,9 @@ def test_train_model_drops_id_columns_unless_asked():
         model = train_model(_df(), target="churn", features=["customer_id", "age"])
     plt.close("all")
     assert "customer_id" in model.named_steps["pre"].transformers_[0][2]
+
+
+def test_sorted_unique_feature_is_not_mistaken_for_an_id():
+    # unique and increasing, but not a row counter, e.g. data sorted by price
+    s = pd.Series([3, 7, 8, 15, 40, 41, 90] * 1 + list(range(100, 200, 3)))
+    assert not is_id_column(s, "price")

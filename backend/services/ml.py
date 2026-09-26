@@ -134,6 +134,11 @@ def _feature_importances(pipe, ax):
     else:
         ax.axis("off"); return
     order = np.argsort(imp)[::-1][:MAX_FEATURE_BARS]
+    # Also as text: the agent reads stdout, not charts — without this it can
+    # only guess which features matter
+    label = "Feature importance" if hasattr(est, "feature_importances_") else "Feature weight (|coef|)"
+    print(f"{label}, top {min(5, len(order))}: " + ", ".join(
+        f"{names[i].split('__')[-1]} {imp[i]:.3f}" for i in order[:5]))
     ax.barh([names[i].split("__")[-1] for i in order][::-1], imp[order][::-1], color="#4f9cf9")
     ax.set_title("Feature importance")
 

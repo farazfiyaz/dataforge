@@ -1,6 +1,7 @@
 # DataForge — AI-powered local data science tool
 # Copyright (C) 2026 Mohammed Farazuddin <farazfiyaz2@gmail.com>
 # License: AGPL-3.0 — see LICENSE
+import ast
 import sys
 import io
 import time
@@ -184,19 +185,27 @@ def run_code(
 
     try:
         plt.close("all")   # drop any figures left over from a previous run — keeps memory flat across a long session
-        compiled = compile(code, SANDBOX_FILENAME, "exec")
+        body, last_expr = _split_last_expression(code)
+        namespace = {**SAFE_GLOBALS, **local_ns}
         sys.settrace(_deadline_tracer(time.monotonic() + EXEC_TIMEOUT_S, EXEC_TIMEOUT_S))
         try:
-            exec(compiled, {**SAFE_GLOBALS, **local_ns}, local_ns)  # noqa: S102
+            exec(body, namespace, local_ns)  # noqa: S102
+            last_value = eval(last_expr, namespace, local_ns) if last_expr else None  # noqa: S307
         finally:
             sys.settrace(old_trace)
+        if (shown := _echo(last_value)) is not None:
+            print(shown)
 
         result["stdout"] = stdout_capture.getvalue()
 
-        # Prefer a DataFrame assigned in THIS run; fall back to any DataFrame
+        # A DataFrame the code ended on is what the user asked to see
+        if isinstance(last_value, pd.DataFrame):
+            result["table"] = last_value.head(100).fillna("").to_dict(orient="records")
+
+        # Otherwise prefer a DataFrame assigned in THIS run; fall back to any DataFrame
         new_keys = [k for k in local_ns.keys() if k not in keys_before]
         scan = list(reversed(new_keys)) or list(reversed(list(local_ns.keys())))
-        for key in scan:
+        for key in scan if result["table"] is None else []:
             val = local_ns[key]
             if isinstance(val, pd.DataFrame):
                 result["table"] = val.head(100).fillna("").to_dict(orient="records")
@@ -230,6 +239,40 @@ def run_code(
         sys.stdout = old_stdout
 
     return result
+
+
+MAX_ECHO_CHARS = 4000
+
+
+def _split_last_expression(code: str):
+    """
+    Notebook semantics: if the code ends with a bare expression (`df.head()`),
+    return (body, expr) so the expression's value can be shown. Small models
+    write notebook-style code constantly; without this they get empty output
+    back and repeat themselves.
+    """
+    tree = ast.parse(code, SANDBOX_FILENAME)
+    if not tree.body or not isinstance(tree.body[-1], ast.Expr):
+        return compile(tree, SANDBOX_FILENAME, "exec"), None
+    last = tree.body.pop()
+    return (compile(tree, SANDBOX_FILENAME, "exec"),
+            compile(ast.Expression(last.value), SANDBOX_FILENAME, "eval"))
+
+
+def _echo(value: Any) -> str | None:
+    """Text for a notebook-style Out[]: None for values a notebook wouldn't show usefully."""
+    if value is None or type(value).__module__.startswith("matplotlib"):
+        return None   # plt.show(), sns.histplot(...) → the chart itself is the output
+    try:
+        if isinstance(value, pd.DataFrame):
+            text = value.to_string(max_rows=30, max_cols=20)
+        elif isinstance(value, pd.Series):
+            text = value.to_string(max_rows=30)
+        else:
+            text = repr(value)
+    except Exception:   # a broken __repr__ must not turn working code into an error
+        return None
+    return text if len(text) <= MAX_ECHO_CHARS else text[:MAX_ECHO_CHARS] + "\n… (truncated)"
 
 
 async def run_code_async(code: str, csv_data: str = "", **kwargs) -> dict[str, Any]:

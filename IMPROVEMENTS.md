@@ -103,6 +103,12 @@ range) and passes it to the model as `chart_data`. The same question now answers
 "basic, 57.7% (pro 44.2%, enterprise 41.4%)", matching pandas exactly. Also
 recovers a call object that has prose before or after it.
 
+### 2026-09-27 — Don't hide DataFrame columns from the model
+Live: asked for the most extreme `support_tickets` values, the model printed the
+rows, but at pandas' default 80-char width the middle columns collapsed to `...`.
+`support_tickets` was hidden, so the model invented values (4, 5; the real max is
+7). The sandbox now uses a 250-char display width and up to 40 columns.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a
@@ -110,3 +116,5 @@ recovers a call object that has prose before or after it.
 - A bare `except:` in generated code can still catch the timeout.
 - `/api/upload` reads the whole file into memory with no size limit.
 - Recommendations could offer "one-click run" instead of just filling the input.
+- Chart descriptions don't cover box plots yet (median/quartiles/outliers). The model can't read them from the image.
+- Heatmap descriptions could list the strongest off-diagonal pairs, not just the value range.

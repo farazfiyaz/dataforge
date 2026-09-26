@@ -60,3 +60,16 @@ def test_train_model_prints_feature_importances(capsys):
     plt.close("all")
     line = next(l for l in capsys.readouterr().out.splitlines() if l.startswith("Feature importance"))
     assert line.index("signal") < line.index("noise")
+
+
+def test_printed_dataframes_show_every_column():
+    # 8 columns like the demo churn data; at the default 80-char width pandas
+    # hid the middle ones behind "..." and the model guessed their values
+    df = pd.DataFrame({c: ["a fairly long value"] * 12 for c in
+                       ["customer_id", "age", "tenure_months", "monthly_bill",
+                        "support_tickets", "plan", "payment_method", "churn"]})
+    put_dataset("wide-ds", df)
+    executor.reset_session("wide")
+    out = executor.run_code("print(df.head(10))", session_id="wide", dataset_id="wide-ds")
+    assert "support_tickets" in out["stdout"]
+    assert "..." not in out["stdout"]

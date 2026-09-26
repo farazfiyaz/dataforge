@@ -15,6 +15,13 @@ import numpy as np
 import pandas as pd
 import matplotlib
 matplotlib.use("Agg")   # non-interactive backend — must be set before pyplot import
+
+# The agent reads printed DataFrames as text. At pandas' default 80-char width,
+# middle columns collapse to "..." and the model invents the values it can't
+# see (seen live: asked about support_tickets, which was hidden, it made up
+# numbers). Rows are still capped by pandas' defaults.
+pd.set_option("display.width", 250)
+pd.set_option("display.max_columns", 40)
 import matplotlib.pyplot as plt
 from typing import Any
 

@@ -64,12 +64,14 @@ def train_model(df: pd.DataFrame, target: str, task: str = None,
     y = data[target]
 
     # ── auto-detect task ──
+    # text labels are dtype `object` in pandas 2 but `str` in pandas 3
+    y_is_text = pd.api.types.is_object_dtype(y) or pd.api.types.is_string_dtype(y)
     if task is None:
-        task = "classification" if (y.dtype == object or y.dtype == bool
+        task = "classification" if (y_is_text or y.dtype == bool
                                     or y.nunique() <= 10) else "regression"
 
     label_encoder = None
-    if task == "classification" and y.dtype == object:
+    if task == "classification" and y_is_text:
         label_encoder = LabelEncoder()
         y = pd.Series(label_encoder.fit_transform(y), index=data.index)
 
@@ -77,7 +79,7 @@ def train_model(df: pd.DataFrame, target: str, task: str = None,
     X = data[features] if features else data.drop(columns=[target])
     X = X.select_dtypes(exclude=["datetime64[ns]", "datetime64[ns, UTC]"])
     num_cols = X.select_dtypes(include="number").columns.tolist()
-    cat_cols = [c for c in X.select_dtypes(include=["object", "category", "bool"]).columns
+    cat_cols = [c for c in X.select_dtypes(include=["object", "string", "category", "bool"]).columns
                 if X[c].nunique() <= MAX_ONEHOT_CARDINALITY]
     dropped = [c for c in X.columns if c not in num_cols + cat_cols]
     X = X[num_cols + cat_cols]

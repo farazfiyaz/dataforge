@@ -29,6 +29,15 @@ after upload, after every agent answer (skipping ones already asked), and as
 "Stuck? Try one of these instead" when the agent hits its step limit. Clicking
 one fills the prompt in Agent mode.
 
+### 2026-09-27 — pandas 3 fixes: Auto Analyze cleaning and train_model
+The venv resolves `pandas>=2.2` to pandas 3, which broke two things silently:
+- **Auto clean didn't fill nulls.** Under Copy-on-Write, `df[col].fillna(..., inplace=True)`
+  is a no-op, so the report said "filled 31 values with median" while the nulls stayed.
+- **`train_model` crashed on text targets** (e.g. `churn` yes/no in the demo data):
+  labels are dtype `str`, not `object`, so they were never encoded.
+Also made text-column selection work on both pandas versions, and stopped whitespace
+stripping from turning missing values into the literal text `"nan"`.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes, and there is no execution timeout; an infinite loop hangs the kernel.
@@ -36,3 +45,4 @@ one fills the prompt in Agent mode.
 - `/api/upload` reads the whole file into memory with no size limit.
 - "Suggested charts" chips offer to plot ID columns (e.g. histogram of `customer_id`).
 - Recommendations could offer "one-click run" instead of just filling the input.
+- `train_model` uses ID columns (e.g. `customer_id`) as features; they should be auto-dropped.

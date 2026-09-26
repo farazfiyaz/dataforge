@@ -21,6 +21,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
+from services.cleaner import text_columns
+
 DARK   = "#0f1117"
 SURF   = "#1a1d27"
 SURF2  = "#21253a"
@@ -149,7 +151,7 @@ def plot_correlation(df: pd.DataFrame) -> dict | None:
 
 def plot_categoricals(df: pd.DataFrame) -> list[dict]:
     """Bar charts for top categorical columns."""
-    cat_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()[:6]
+    cat_cols = text_columns(df, include_category=True)[:6]
     results = []
     for col in cat_cols:
         vc = df[col].value_counts().head(10)

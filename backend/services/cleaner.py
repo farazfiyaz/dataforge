@@ -14,6 +14,15 @@ from typing import Any
 NULL_DROP_THRESHOLD = 0.70   # drop columns with >70% missing values
 
 
+def text_columns(df: pd.DataFrame, include_category: bool = False) -> list:
+    """
+    Text columns under both pandas 2 (dtype `object`) and pandas 3 (dtype `str`).
+    `include="object"` alone misses pandas 3 string columns.
+    """
+    kinds = ["object", "string"] + (["category"] if include_category else [])
+    return df.select_dtypes(include=kinds).columns.tolist()
+
+
 def auto_clean(df: pd.DataFrame) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
     """
     Run the full auto-clean pipeline.
@@ -62,7 +71,7 @@ def auto_clean(df: pd.DataFrame) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
         null_cnt = df[col].isna().sum()
         if null_cnt > 0:
             median_val = df[col].median()
-            df[col].fillna(median_val, inplace=True)
+            df[col] = df[col].fillna(median_val)
             filled_numeric.append(f"{col} ({null_cnt:,} → median {round(median_val, 4)})")
     if filled_numeric:
         report.append({
@@ -72,14 +81,14 @@ def auto_clean(df: pd.DataFrame) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
         })
 
     # 5. Fill categorical nulls with mode
-    cat_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
+    cat_cols = text_columns(df, include_category=True)
     filled_cat = []
     for col in cat_cols:
         null_cnt = df[col].isna().sum()
         if null_cnt > 0:
             mode_vals = df[col].mode()
             if len(mode_vals) > 0:
-                df[col].fillna(mode_vals[0], inplace=True)
+                df[col] = df[col].fillna(mode_vals[0])
                 filled_cat.append(f"{col} ({null_cnt:,} → '{mode_vals[0]}')")
     if filled_cat:
         report.append({
@@ -88,14 +97,14 @@ def auto_clean(df: pd.DataFrame) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
             "impact": len(filled_cat),
         })
 
-    # 6. Strip whitespace from string columns
-    str_cols = df.select_dtypes(include="object").columns
-    for col in str_cols:
-        df[col] = df[col].astype(str).str.strip()
+    # 6. Strip whitespace from string columns (leaving missing values and
+    # non-string cells alone — astype(str) would turn NaN into the text "nan")
+    for col in text_columns(df):
+        df[col] = df[col].map(lambda v: v.strip() if isinstance(v, str) else v)
 
     # 7. Infer better dtypes (e.g. string numbers → int/float)
     converted = []
-    for col in df.select_dtypes(include="object").columns:
+    for col in text_columns(df):
         try:
             df[col] = pd.to_numeric(df[col])
             converted.append(col)

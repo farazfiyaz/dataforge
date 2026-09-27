@@ -127,6 +127,15 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-09-28 — Describe each box in a grouped box plot
+"Compare monthly_bill across plans" as a box plot was described to the model as
+one combined span ("boxes and whiskers span 3.04 to 124.5"), so it couldn't say
+which plan was higher. Box plots (seaborn, pandas `df.boxplot(by=...)`,
+`plt.boxplot`, vertical or horizontal) are now summarised per box: median,
+middle 50%, whiskers and that box's outliers, named by category. Seaborn `hue`
+boxes are named "category / hue" from the legend. Single boxes also get their
+median. On the demo data every median and quartile matches pandas exactly.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a
@@ -134,4 +143,4 @@ Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally
 - A bare `except:` in generated code can still catch the timeout.
 - `/api/upload` reads the whole file into memory with no size limit.
 - Recommendations could offer "one-click run" instead of just filling the input.
-- Box plots with several boxes are summarised as one combined span; per-box medians/quartiles would be better.
+- Violin/strip/swarm plots aren't described beyond their raw collections.

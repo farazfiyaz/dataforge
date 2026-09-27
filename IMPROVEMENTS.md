@@ -127,6 +127,16 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-09-28 — "No file attached" message and a Stop button
+- Asking the agent something with no data used to let the model write code
+  against a `df` that doesn't exist. Now the backend answers immediately, without
+  calling the model: "There's no file attached…", with an Attach button. It gives a
+  separate message when a restored chat's file is gone after a restart. Code and
+  Plot modes check in the frontend; Explain still works without a file.
+- While a reply is in progress, the send button becomes Stop (Esc also works).
+  Stopping aborts the request; the backend cancels the run and drops the unfinished
+  turn from the agent's memory, so the next question starts clean.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

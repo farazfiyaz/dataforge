@@ -28,6 +28,11 @@ def put_dataset(dataset_id: str, df: pd.DataFrame) -> None:
         _DATASETS.popitem(last=False)
 
 
+def has_dataset(dataset_id: str | None) -> bool:
+    """Cheap existence check (get_dataset copies the whole frame)."""
+    return bool(dataset_id) and dataset_id in _DATASETS
+
+
 def get_dataset(dataset_id: str) -> pd.DataFrame | None:
     """
     Return a COPY of the dataset (sessions may mutate their df freely

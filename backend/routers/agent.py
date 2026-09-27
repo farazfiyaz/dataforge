@@ -27,7 +27,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from services.llm import OllamaError, chat_ollama
-from services.datastore import get_dataset
+from services.datastore import get_dataset, has_dataset
 from services.executor import run_code_async, reset_session, peek_session_df
 from services.recommend import recommend
 from services.workspace import set_workspace, get_workspace
@@ -269,6 +269,12 @@ def _schema(dataset_id: Optional[str]) -> Optional[str]:
     return "\n".join(lines)
 
 
+NEEDS_FILE = ("There's no file attached, so there's no data to work on yet. Attach a CSV or "
+              "Excel file and ask again, or switch to Explain mode for general questions.")
+NEEDS_FILE_STALE = ("The file for this chat isn't loaded any more (DataForge was restarted since "
+                    "it was attached). Attach it again to keep working with it.")
+
+
 def _sse(event: str, data: dict) -> str:
     """Format one Server-Sent Event."""
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
@@ -326,6 +332,16 @@ async def agent(req: AgentRequest):
     """Run the agentic loop, streaming steps as SSE."""
     session_id = req.session_id or uuid.uuid4().hex
 
+    # No data to work on: say so right away instead of letting the model write
+    # code against a `df` that doesn't exist (and loop on NameErrors)
+    has_data = (has_dataset(req.dataset_id) or req.csv_data.strip()
+                or peek_session_df(session_id) is not None or get_workspace())
+    if not has_data:
+        return StreamingResponse(iter([
+            _sse("start", {"session_id": session_id}),
+            _sse("needs_file", {"message": NEEDS_FILE_STALE if req.dataset_id else NEEDS_FILE}),
+        ]), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+
     # Continue the existing conversation if there is one — this is what lets
     # the user say "fix it" / "now color by category" and have it just work
     messages = _CONVERSATIONS.get(session_id)
@@ -336,9 +352,25 @@ async def agent(req: AgentRequest):
             {"role": "system", "content": SYSTEM_PROMPT.format(
                 schema=_schema(req.dataset_id) or req.context or "unknown")},
         ]
+    turn_start = len(messages)
     messages.append({"role": "user", "content": req.message})
 
     async def stream():
+        """
+        Stopped by the user (the browser aborts the request, Starlette cancels
+        this generator): drop the half-finished turn from the conversation, so
+        the next message doesn't build on a tool call with no result.
+        """
+        finished = False
+        try:
+            async for chunk in run():
+                yield chunk
+            finished = True
+        finally:
+            if not finished:
+                del messages[turn_start:]
+
+    async def run():
         yield _sse("start", {"session_id": session_id})
 
         # ```python blocks in a reply are code to run (not examples) until

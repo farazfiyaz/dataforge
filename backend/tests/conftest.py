@@ -19,3 +19,12 @@ APP_ORIGIN = "http://localhost:8000"
 @pytest.fixture
 def client():
     return TestClient(app, base_url=APP_ORIGIN)
+
+
+@pytest.fixture(autouse=True)
+def no_workspace():
+    """The workspace folder is process-global; don't let one test's leak into another."""
+    from services import workspace
+    workspace._workspace_root = None
+    yield
+    workspace._workspace_root = None

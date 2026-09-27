@@ -67,7 +67,7 @@ def test_chat_endpoint_shows_the_fix_when_ollama_is_down(client, monkeypatch):
 
 def test_agent_stream_shows_the_fix_when_model_is_missing(client, monkeypatch):
     _mock_ollama(monkeypatch, lambda r: httpx.Response(404, json={"error": "model 'x' not found"}))
-    res = client.post("/api/agent/", json={"message": "hi"}, headers={"Origin": APP_ORIGIN})
+    res = client.post("/api/agent/", json={"message": "hi", "csv_data": "a,b\n1,2\n"}, headers={"Origin": APP_ORIGIN})
     assert "event: error" in res.text
     assert "ollama pull" in res.text
     assert "Ollama error:" not in res.text      # no raw exception prefix

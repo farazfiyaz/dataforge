@@ -494,6 +494,11 @@ button { cursor: pointer; }
 #send-btn:not(:disabled):hover { background: var(--ink); color: var(--paper); }
 #send-btn:not(:disabled):active { transform: translateY(1px); }
 #send-btn:disabled { opacity: .3; cursor: default; }
+/* While a reply is being worked on, the send button becomes Stop */
+#send-btn.stop { background: var(--ink); color: var(--paper); font-size: 15px; }
+#send-btn.stop:hover { background: var(--danger); color: var(--paper); }
+.needs-file-row { margin-top: 12px; }
+.msg-body.stopped { color: var(--ink-3); }
 .input-hint { font-size: 12px; color: var(--ink-3); margin-top: 8px; }
 
 /* Scrollbars */
@@ -566,6 +571,7 @@ button { cursor: pointer; }
   <symbol id="i-plus" viewBox="0 0 256 256"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></symbol>
   <symbol id="i-paperclip" viewBox="0 0 256 256"><path d="M209.66,122.34a8,8,0,0,1,0,11.32l-82.05,82a56,56,0,0,1-79.2-79.21L147.67,35.73a40,40,0,1,1,56.61,56.55L105,193A24,24,0,1,1,71,159L154.3,74.38A8,8,0,1,1,165.7,85.6L82.39,170.31a8,8,0,1,0,11.27,11.36L192.93,81A24,24,0,1,0,159,47L59.76,147.68a40,40,0,1,0,56.53,56.62l82.06-82A8,8,0,0,1,209.66,122.34Z"/></symbol>
   <symbol id="i-folder-open" viewBox="0 0 256 256"><path d="M245,110.64A16,16,0,0,0,232,104H216V88a16,16,0,0,0-16-16H130.67L102.94,51.2a16.14,16.14,0,0,0-9.6-3.2H40A16,16,0,0,0,24,64V208h0a8,8,0,0,0,8,8H211.1a8,8,0,0,0,7.59-5.47l28.49-85.47A16.05,16.05,0,0,0,245,110.64ZM93.34,64,123.2,86.4A8,8,0,0,0,128,88h72v16H69.77a16,16,0,0,0-15.18,10.94L40,158.7V64Zm112,136H43.1l26.67-80H232Z"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 256 256"><rect x="52" y="52" width="152" height="152" rx="12"/></symbol>
   <symbol id="i-arrow-up" viewBox="0 0 256 256"><path d="M205.66,117.66a8,8,0,0,1-11.32,0L136,59.31V216a8,8,0,0,1-16,0V59.31L61.66,117.66a8,8,0,0,1-11.32-11.32l72-72a8,8,0,0,1,11.32,0l72,72A8,8,0,0,1,205.66,117.66Z"/></symbol>
   <symbol id="i-copy" viewBox="0 0 256 256"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></symbol>
   <symbol id="i-play" viewBox="0 0 256 256"><path d="M232.4,114.49,88.32,26.35a16,16,0,0,0-16.2-.3A15.86,15.86,0,0,0,64,39.87V216.13A15.94,15.94,0,0,0,80,232a16.07,16.07,0,0,0,8.36-2.35L232.4,141.51a15.81,15.81,0,0,0,0-27ZM80,215.94V40l143.83,88Z"/></symbol>
@@ -727,6 +733,7 @@ let state = {
   messages: [],     // [{role, parts}]  parts = array of {type, content}
   streaming: false,
   agentSessionId: null,  // persistent agent kernel id (server-side namespace)
+  abort: null,      // AbortController of the request in progress (Stop button)
 };
 
 // ── DOM ──
@@ -988,6 +995,7 @@ function startNewChat(projectId = db.projects[0].id) {
   state.chatId   = null;
   state.messages = [];
   state.file     = null;
+  stopRun();
   state.streaming = false;
 
   attachedFile.classList.remove("visible");
@@ -1066,8 +1074,28 @@ document.getElementById("welcome-attach").addEventListener("click", () => fileIn
 
 // ── Input ──
 function updateSendBtn() {
+  if (state.streaming) {           // while a reply is in progress the button stops it
+    sendBtn.disabled = false;
+    sendBtn.classList.add("stop");
+    sendBtn.title = "Stop (Esc)";
+    sendBtn.setAttribute("aria-label", "Stop");
+    sendBtn.innerHTML = icon("stop");
+    return;
+  }
+  sendBtn.classList.remove("stop");
+  sendBtn.title = "Send (Enter)";
+  sendBtn.setAttribute("aria-label", "Send");
+  sendBtn.innerHTML = icon("arrow-up");
   sendBtn.disabled = msgInput.value.trim() === "" && !state.file;
 }
+
+// Aborting the request makes the backend cancel the run (and Ollama stop generating)
+function stopRun() {
+  state.abort?.abort();
+}
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && state.streaming) stopRun();
+});
 
 msgInput.addEventListener("input", () => {
   msgInput.style.height = "auto";
@@ -1082,7 +1110,7 @@ msgInput.addEventListener("keydown", e => {
     if (!sendBtn.disabled && !state.streaming) submit();
   }
 });
-sendBtn.addEventListener("click", () => { if (!state.streaming) submit(); });
+sendBtn.addEventListener("click", () => { if (state.streaming) stopRun(); else submit(); });
 
 // ── File attach ──
 attachBtn.addEventListener("click", () => fileInput.click());
@@ -1172,7 +1200,46 @@ async function submit() {
     return;
   }
 
-  await sendChat(text, fileRef, modeSelect.value);
+  const mode = modeSelect.value;
+  if (!fileRef && (mode === "code" || mode === "plot")) {
+    showNeedsFile(addAssistantTurn(), NEEDS_FILE);
+    return;
+  }
+  await sendChat(text, fileRef, mode);
+}
+
+const NEEDS_FILE = "There's no file attached, so there's no data to work on yet. " +
+  "Attach a CSV or Excel file and ask again, or switch to Explain mode for general questions.";
+
+function showNeedsFile(turn, message) {
+  appendText(turn, message);
+  const row = document.createElement("div");
+  row.className = "needs-file-row";
+  const btn = document.createElement("button");
+  btn.className = "btn primary";
+  btn.innerHTML = `${icon("paperclip")}Attach a file`;
+  btn.addEventListener("click", () => fileInput.click());
+  row.appendChild(btn);
+  turn.appendChild(row);
+  state.messages.push({ role: "assistant", text: message });
+  saveCurrentChat();
+  scrollBottom();
+}
+
+function showStopped(turn) {
+  // a step that was mid-run when stopped
+  turn.querySelectorAll(".agent-step-label").forEach(label => {
+    if (!label.querySelector(".spin")) return;
+    const n = escHtml(label.closest(".agent-step")?.dataset.step || "");
+    label.innerHTML = `${icon("stop")}<span>Step ${n}</span><span class="state">Stopped</span>`;
+  });
+  const p = document.createElement("div");
+  p.className = "msg-body stopped";
+  p.textContent = "Stopped.";
+  turn.appendChild(p);
+  state.messages.push({ role: "assistant", text: "Stopped." });
+  saveCurrentChat();
+  scrollBottom();
 }
 
 async function sendChat(text, fileRef, mode) {
@@ -1180,10 +1247,13 @@ async function sendChat(text, fileRef, mode) {
   const assistantTurn = addAssistantTurn();
   showTyping(assistantTurn);
   state.streaming = true;
+  state.abort = new AbortController();
+  updateSendBtn();
 
   try {
     const res = await fetch(`${API}/chat/`, {
       method: "POST",
+      signal: state.abort.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: text, context: buildContext(fileRef?.profile), mode }),
     });
@@ -1198,9 +1268,11 @@ async function sendChat(text, fileRef, mode) {
     saveCurrentChat();
   } catch (e) {
     hideTyping(assistantTurn);
-    appendError(assistantTurn, `No answer from the local model: ${e.message}`);
+    if (e.name === "AbortError") showStopped(assistantTurn);
+    else appendError(assistantTurn, `No answer from the local model: ${e.message}`);
   } finally {
     state.streaming = false;
+    state.abort = null;
     updateSendBtn();
   }
 }
@@ -1239,10 +1311,13 @@ async function sendAgent(text, fileRef) {
   const turn = addAssistantTurn();
   showTyping(turn, "Planning");
   state.streaming = true;
+  state.abort = new AbortController();
+  updateSendBtn();
 
   try {
     const res = await fetch(`${API}/agent/`, {
       method: "POST",
+      signal: state.abort.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message: text,
@@ -1291,6 +1366,8 @@ async function sendAgent(text, fileRef) {
           // attach to the answer just saved so they come back when the chat is reopened
           const last = state.messages[state.messages.length - 1];
           if (last?.role === "assistant") { last.recs = { items: data.items, stuck: data.stuck }; saveCurrentChat(); }
+        } else if (ev === "needs_file") {
+          showNeedsFile(turn, data.message);
         } else if (ev === "error") {
           appendError(turn, data.message);
         }
@@ -1299,10 +1376,12 @@ async function sendAgent(text, fileRef) {
     }
   } catch (e) {
     hideTyping(turn);
-    appendError(turn, `The agent stopped: ${e.message}`);
+    if (e.name === "AbortError") showStopped(turn);
+    else appendError(turn, `The agent stopped: ${e.message}`);
   } finally {
     hideTyping(turn);
     state.streaming = false;
+    state.abort = null;
     updateSendBtn();
   }
 }

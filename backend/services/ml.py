@@ -33,6 +33,8 @@ from sklearn.metrics import (
     confusion_matrix, r2_score, mean_absolute_error, mean_squared_error,
 )
 
+from services.eda import is_id_column
+
 MAX_ONEHOT_CARDINALITY = 20   # categorical columns with more uniques get dropped
 MAX_FEATURE_BARS = 15         # top-N features shown in the importance chart
 
@@ -64,22 +66,28 @@ def train_model(df: pd.DataFrame, target: str, task: str = None,
     y = data[target]
 
     # ── auto-detect task ──
+    # text labels are dtype `object` in pandas 2 but `str` in pandas 3
+    y_is_text = pd.api.types.is_object_dtype(y) or pd.api.types.is_string_dtype(y)
     if task is None:
-        task = "classification" if (y.dtype == object or y.dtype == bool
+        task = "classification" if (y_is_text or y.dtype == bool
                                     or y.nunique() <= 10) else "regression"
 
     label_encoder = None
-    if task == "classification" and y.dtype == object:
+    if task == "classification" and y_is_text:
         label_encoder = LabelEncoder()
         y = pd.Series(label_encoder.fit_transform(y), index=data.index)
 
     # ── feature selection ──
     X = data[features] if features else data.drop(columns=[target])
+    # identifiers look like strong features (they're unique per row) but only
+    # memorize rows — leave them out unless the caller asked for them
+    id_cols = [] if features else [c for c in X.columns if is_id_column(X[c], c)]
+    X = X.drop(columns=id_cols)
     X = X.select_dtypes(exclude=["datetime64[ns]", "datetime64[ns, UTC]"])
     num_cols = X.select_dtypes(include="number").columns.tolist()
-    cat_cols = [c for c in X.select_dtypes(include=["object", "category", "bool"]).columns
+    cat_cols = [c for c in X.select_dtypes(include=["object", "string", "category", "bool"]).columns
                 if X[c].nunique() <= MAX_ONEHOT_CARDINALITY]
-    dropped = [c for c in X.columns if c not in num_cols + cat_cols]
+    dropped = id_cols + [c for c in X.columns if c not in num_cols + cat_cols]
     X = X[num_cols + cat_cols]
     if X.empty:
         raise ValueError("no usable feature columns found")
@@ -126,6 +134,11 @@ def _feature_importances(pipe, ax):
     else:
         ax.axis("off"); return
     order = np.argsort(imp)[::-1][:MAX_FEATURE_BARS]
+    # Also as text: the agent reads stdout, not charts — without this it can
+    # only guess which features matter
+    label = "Feature importance" if hasattr(est, "feature_importances_") else "Feature weight (|coef|)"
+    print(f"{label}, top {min(5, len(order))}: " + ", ".join(
+        f"{names[i].split('__')[-1]} {imp[i]:.3f}" for i in order[:5]))
     ax.barh([names[i].split("__")[-1] for i in order][::-1], imp[order][::-1], color="#4f9cf9")
     ax.set_title("Feature importance")
 

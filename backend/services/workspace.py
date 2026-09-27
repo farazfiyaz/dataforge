@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from services.loader import read_table
+
 DATA_EXTENSIONS = {".csv", ".xlsx", ".xls", ".json", ".parquet", ".tsv"}
 
 _workspace_root: Path | None = None
@@ -75,6 +77,8 @@ def load_file(relpath: str, **kwargs) -> pd.DataFrame:
     ext = p.suffix.lower()
     if ext not in DATA_EXTENSIONS:
         raise ValueError(f"unsupported file type '{ext}' — allowed: {sorted(DATA_EXTENSIONS)}")
+    if ext in (".csv", ".tsv", ".xlsx", ".xls") and not kwargs:
+        return read_table(p.read_bytes(), p.name)   # sniffs encoding/delimiter/decimal
     if ext in (".csv", ".tsv"):
         return pd.read_csv(p, sep="\t" if ext == ".tsv" else ",", **kwargs)
     if ext in (".xlsx", ".xls"):

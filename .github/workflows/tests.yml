@@ -1,0 +1,55 @@
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    name: backend (Python ${{ matrix.python }}, pandas ${{ matrix.pandas }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # pandas 2 and 3 differ in string dtypes and Copy-on-Write — test both
+          - python: "3.11"
+            pandas: "2.2.*"
+          - python: "3.13"
+            pandas: "3.*"
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt "pandas==${{ matrix.pandas }}"
+      - name: Run tests
+        env:
+          MPLBACKEND: Agg
+        run: python -m pytest -q tests
+
+  frontend:
+    name: frontend script syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check inline script parses
+        run: |
+          python3 - <<'PY'
+          import re
+          html = open("frontend/index.html", encoding="utf-8").read()
+          js = re.findall(r"<script>(.*?)</script>", html, re.S)
+          assert js, "no inline <script> found"
+          open("/tmp/page.js", "w", encoding="utf-8").write("\n".join(js))
+          PY
+          node --check /tmp/page.js

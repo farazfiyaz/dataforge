@@ -1,9 +1,15 @@
 # DataForge — AI-powered local data science tool
 # Copyright (C) 2026 Mohammed Farazuddin <farazfiyaz2@gmail.com>
 # License: AGPL-3.0 — see LICENSE
-import pandas as pd
-import numpy as np
+import re
+import warnings
 from typing import Any
+
+import numpy as np
+import pandas as pd
+
+_ID_HINTS = re.compile(r"(^|_)(id|uuid|key|index)$", re.IGNORECASE)
+_DATE_HINTS = re.compile(r"date|time|month|year|day|_at$|timestamp", re.IGNORECASE)
 
 def run_eda(df: pd.DataFrame) -> dict[str, Any]:
     """
@@ -14,6 +20,7 @@ def run_eda(df: pd.DataFrame) -> dict[str, Any]:
         "columns": [],
         "duplicates": int(df.duplicated().sum()),
         "sample": df.head(5).fillna("").to_dict(orient="records"),
+        "date_column": find_date_column(df),
     }
 
     for col in df.columns:
@@ -23,6 +30,7 @@ def run_eda(df: pd.DataFrame) -> dict[str, Any]:
             "dtype": str(series.dtype),
             "null_count": int(series.isna().sum()),
             "null_pct": round(series.isna().mean() * 100, 2),
+            "is_id": is_id_column(series, col),
         }
 
         if pd.api.types.is_numeric_dtype(series):
@@ -48,6 +56,39 @@ def run_eda(df: pd.DataFrame) -> dict[str, Any]:
         profile["columns"].append(col_info)
 
     return profile
+
+
+def is_id_column(s: pd.Series, name) -> bool:
+    """Unique-per-row identifiers (customer_id, a 1..n counter) — meaningless to plot or model."""
+    n = len(s)
+    if n < 2 or s.nunique() < 0.95 * n:
+        return False
+    if _ID_HINTS.search(str(name)):
+        return True
+    # Unnamed: only a true row counter (steps of exactly 1). Merely unique and
+    # increasing is just as likely a real feature in data sorted by it.
+    return bool(pd.api.types.is_integer_dtype(s) and s.nunique() == n
+                and (s.diff().dropna() == 1).all())
+
+
+def find_date_column(df: pd.DataFrame) -> str | None:
+    """First column holding dates: a datetime dtype, or text named like a date that parses as one."""
+    for c in df.columns:
+        if pd.api.types.is_datetime64_any_dtype(df[c]):
+            return c
+    for c in df.columns:
+        # object (pandas 2) or str (pandas 3) columns named like dates
+        if (df[c].dtype == object or pd.api.types.is_string_dtype(df[c])) and _DATE_HINTS.search(str(c)):
+            sample = df[c].dropna().astype(str).head(50)
+            if sample.empty:
+                continue
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                parsed = pd.to_datetime(sample, errors="coerce")
+            if parsed.notna().mean() > 0.8:
+                return c
+    return None
+
 
 
 def _safe(val) -> Any:

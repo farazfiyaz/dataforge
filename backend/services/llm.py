@@ -1,34 +1,62 @@
 # DataForge — AI-powered local data science tool
 # Copyright (C) 2026 Mohammed Farazuddin <farazfiyaz2@gmail.com>
 # License: AGPL-3.0 — see LICENSE
-import json
 import os
 import httpx
 
-OLLAMA_URL      = "http://localhost:11434/api/generate"
-OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
+OLLAMA_HOST     = "http://localhost:11434"
+OLLAMA_CHAT_URL = f"{OLLAMA_HOST}/api/chat"
 # Electron picks the model size that fits the machine's RAM (see electron/main.js
 # pickModel()) and passes it in via this env var; falls back to the 7B model when
 # run outside Electron (e.g. `python app.py` directly).
 DEFAULT_MODEL   = os.environ.get("DATAFORGE_MODEL", "qwen2.5-coder:7b")
 
 
-async def call_ollama(system_prompt: str, user_message: str) -> str:
-    """
-    Send a request to Ollama and return the full response as a string.
-    Uses stream=False so Electron's network stack doesn't choke on chunked encoding.
-    """
-    payload = {
-        "model": DEFAULT_MODEL,
-        "prompt": f"<|system|>\n{system_prompt}\n<|user|>\n{user_message}\n<|assistant|>",
-        "stream": False,
-    }
+class OllamaError(RuntimeError):
+    """An Ollama failure, worded for the user: what went wrong and how to fix it."""
 
-    async with httpx.AsyncClient(timeout=180) as client:
-        resp = await client.post(OLLAMA_URL, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-        return data.get("response", "").strip()
+
+def _client(timeout: float) -> httpx.AsyncClient:
+    return httpx.AsyncClient(timeout=timeout)
+
+
+async def _post_chat(payload: dict, timeout: float) -> dict:
+    """POST to /api/chat, translating transport errors into actionable OllamaErrors."""
+    model = payload.get("model")
+    try:
+        async with _client(timeout) as client:
+            resp = await client.post(OLLAMA_CHAT_URL, json=payload)
+    except httpx.ConnectError:
+        raise OllamaError(
+            f"Can't reach Ollama at {OLLAMA_HOST}. Start it with `ollama serve` "
+            "(the DataForge desktop app starts it automatically), then try again."
+        ) from None
+    except httpx.TimeoutException:
+        raise OllamaError(
+            f"Ollama took longer than {timeout:g}s to answer. The model may still be loading. "
+            "Try again, or ask a smaller question."
+        ) from None
+    if resp.status_code == 404 and "not found" in resp.text.lower():
+        raise OllamaError(f"The model `{model}` isn't downloaded yet. Run `ollama pull {model}` and try again.")
+    if resp.status_code >= 400:
+        raise OllamaError(f"Ollama returned an error ({resp.status_code}): {resp.text[:300]}")
+    return resp.json()
+
+
+async def call_ollama(system_prompt: str, user_message: str, model: str = DEFAULT_MODEL) -> str:
+    """
+    Single-shot question → answer text.
+
+    Uses /api/chat with real system/user roles, so Ollama applies the model's
+    own chat template (the old /api/generate call hand-wrote `<|system|>` tags
+    that Qwen doesn't use, so the "system prompt" arrived as user text).
+    """
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_message},
+    ]
+    data = await _post_chat({"model": model, "messages": messages, "stream": False}, timeout=180)
+    return (data.get("message") or {}).get("content", "").strip()
 
 
 async def chat_ollama(
@@ -55,8 +83,5 @@ async def chat_ollama(
     if tools:
         payload["tools"] = tools
 
-    async with httpx.AsyncClient(timeout=300) as client:
-        resp = await client.post(OLLAMA_CHAT_URL, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-        return data.get("message", {"role": "assistant", "content": ""})
+    data = await _post_chat(payload, timeout=300)
+    return data.get("message", {"role": "assistant", "content": ""})

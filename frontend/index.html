@@ -359,6 +359,23 @@ button { cursor: pointer; }
 
 .section-title { margin: 22px 0 8px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
 
+/* Recommended next steps: rule-separated rows, same idiom as the suggestion grid */
+.recs { margin: 10px 0 4px; border-top: 1px solid var(--rule-strong); }
+.recs-note { margin-top: 2px; font-size: 13px; color: var(--ink-3); }
+.rec {
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px;
+  width: 100%; text-align: left; background: none; border: 0;
+  border-bottom: 1px solid var(--rule); padding: 9px 0;
+  transition: background .15s, padding .25s var(--ease-out);
+}
+.rec:hover { background: var(--field-tint); padding-left: 8px; }
+.rec .rec-title { font-size: 14px; font-weight: 600; }
+.rec:hover .rec-title { color: var(--field-text); }
+.rec .rec-reason { display: block; margin-top: 1px; font-size: 13px; color: var(--ink-3); }
+.rec .ic { font-size: 13px; opacity: 0; transform: translateX(-4px); transition: opacity .15s, transform .25s var(--ease-out); }
+.rec code { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
+.rec:hover .ic, .rec:focus-visible .ic { opacity: 1; transform: none; }
+
 /* Plot suggestions */
 .plot-suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
 .plot-suggest-chip {
@@ -657,7 +674,7 @@ button { cursor: pointer; }
           <div class="input-left">
             <button class="tool-btn" id="attach-btn" title="Attach a CSV or Excel file"><svg class="ic" aria-hidden="true"><use href="#i-paperclip"/></svg>Attach</button>
             <button class="tool-btn" id="workspace-btn" title="Choose a folder the agent can browse and load files from"><svg class="ic" aria-hidden="true"><use href="#i-folder-open"/></svg>Workspace</button>
-            <input type="file" id="file-input" accept=".csv,.xlsx,.xls" />
+            <input type="file" id="file-input" accept=".csv,.tsv,.txt,.xlsx,.xls" />
             <span class="divider" aria-hidden="true"></span>
             <div class="modes" role="radiogroup" aria-label="Mode">
               <input type="radio" name="mode" id="mode-agent" value="agent" checked /><label for="mode-agent" title="Plans, runs code, and fixes itself until it has an answer">Agent</label>
@@ -944,6 +961,7 @@ function replayMessage(msg) {
     const turn = addAssistantTurn();
     renderAssistantContent(turn, msg.text, state.file);
     if (msg.edaProfile) renderEdaResponse(turn, msg.edaProfile, msg.filename);
+    if (msg.recs?.items?.length) renderRecommendations(turn, msg.recs.items, { stuck: msg.recs.stuck });
     return turn;
   }
 }
@@ -1268,6 +1286,11 @@ async function sendAgent(text, fileRef) {
           renderAssistantContent(turn, data.content || "", fileRef || state.file);
           state.messages.push({ role: "assistant", text: data.content || "" });
           saveCurrentChat();
+        } else if (ev === "recommendations") {
+          renderRecommendations(turn, data.items, { stuck: data.stuck });
+          // attach to the answer just saved so they come back when the chat is reopened
+          const last = state.messages[state.messages.length - 1];
+          if (last?.role === "assistant") { last.recs = { items: data.items, stuck: data.stuck }; saveCurrentChat(); }
         } else if (ev === "error") {
           appendError(turn, data.message);
         }
@@ -1410,14 +1433,18 @@ function renderEdaResponse(turn, profile, filename, fileObj) {
   `;
   turn.appendChild(readings);
 
+  if (profile.recommendations?.length) {
+    renderRecommendations(turn, profile.recommendations, { title: "Recommended next steps" });
+  }
+
   // Plot suggestions
-  if (numeric.length > 0) {
+  const suggestions = buildPlotSuggestions(numeric, categ, profile.date_column);
+  if (suggestions.length > 0) {
     const suggestLabel = document.createElement("div");
     suggestLabel.className = "section-title";
     suggestLabel.textContent = "Suggested charts";
     turn.appendChild(suggestLabel);
 
-    const suggestions = buildPlotSuggestions(numeric, categ);
     const chips = document.createElement("div");
     chips.className = "plot-suggestions";
     suggestions.forEach(s => {
@@ -1459,17 +1486,50 @@ function renderEdaResponse(turn, profile, filename, fileObj) {
   scrollBottom();
 }
 
-function buildPlotSuggestions(numeric, categ) {
+// Clickable next-step suggestions computed from the data (services/recommend.py).
+// `stuck` = the agent gave up, so frame them as easier questions to try instead.
+function renderRecommendations(turn, items, { title, stuck = false } = {}) {
+  const heading = document.createElement("div");
+  heading.className = "section-title";
+  heading.textContent = title || (stuck ? "Stuck? Try one of these instead" : "What to try next");
+  turn.appendChild(heading);
+  if (stuck) {
+    const note = document.createElement("div");
+    note.className = "recs-note";
+    note.textContent = "Smaller, specific questions work best with a local model.";
+    turn.appendChild(note);
+  }
+  const list = document.createElement("div");
+  list.className = "recs";
+  items.forEach(r => {
+    const btn = document.createElement("button");
+    btn.className = "rec";
+    btn.title = r.prompt;
+    btn.innerHTML = `<span><span class="rec-title">${escHtml(r.title)}</span><span class="rec-reason">${escHtml(r.reason).replace(/`([^`]+)`/g, "<code>$1</code>")}</span></span>${icon("caret-right")}`;
+    btn.addEventListener("click", () => {
+      msgInput.value = r.prompt;
+      modeSelect.value = "agent";   // recommendations are written for the agent
+      msgInput.dispatchEvent(new Event("input"));
+      msgInput.focus();
+    });
+    list.appendChild(btn);
+  });
+  turn.appendChild(list);
+  scrollBottom();
+}
+
+function buildPlotSuggestions(numeric, categ, dateCol) {
   const suggestions = [];
-  const numNames = numeric.map(c => c.name);
-  const catNames = categ.map(c => c.name);
+  // identifiers (customer_id, row counters) make meaningless charts
+  const numNames = numeric.filter(c => !c.is_id).map(c => c.name);
+  const catNames = categ.filter(c => !c.is_id).map(c => c.name);
 
   if (numNames.length >= 1) suggestions.push(`Plot histogram of ${numNames[0]}`);
   if (numNames.length >= 2) suggestions.push(`Scatter plot of ${numNames[0]} vs ${numNames[1]}`);
   if (numNames.length >= 2) suggestions.push(`Correlation heatmap of all numeric columns`);
   if (numNames.length >= 1) suggestions.push(`Box plot of ${numNames[0]} to find outliers`);
   if (catNames.length >= 1) suggestions.push(`Bar chart of top values in ${catNames[0]}`);
-  if (numNames.length >= 1) suggestions.push(`Line chart of ${numNames[0]} over time`);
+  if (dateCol && numNames.length >= 1) suggestions.push(`Line chart of ${numNames[0]} over ${dateCol}`);
   if (numNames.length >= 2) suggestions.push(`Distribution comparison: ${numNames[0]} vs ${numNames[1]}`);
 
   return suggestions.slice(0, 6);
@@ -1526,7 +1586,7 @@ function renderAutoAnalyzeResult(turn, data) {
       const blob  = new Blob([bytes], { type: "text/csv" });
       const url   = URL.createObjectURL(blob);
       const a     = document.createElement("a");
-      a.href = url; a.download = "cleaned_" + (data.filename || "data.csv");
+      a.href = url; a.download = "cleaned_" + (data.filename || "data").replace(/\.[^.]+$/, "") + ".csv";   // contents are always CSV
       a.click(); URL.revokeObjectURL(url);
     });
     turn.appendChild(dlBtn);

@@ -3,7 +3,7 @@
 # License: AGPL-3.0 — see LICENSE
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from services.executor import run_code
+from services.executor import run_code_async
 
 router = APIRouter()
 
@@ -18,7 +18,7 @@ async def execute(req: ExecuteRequest):
     Run user/LLM-generated Python code in a sandboxed environment.
     Returns stdout, a table result (JSON), and/or a base64-encoded chart image.
     """
-    result = run_code(req.code, req.csv_data, dataset_id=req.dataset_id or None)
+    result = await run_code_async(req.code, req.csv_data, dataset_id=req.dataset_id or None)
     if result.get("error"):
         raise HTTPException(status_code=422, detail=result["error"])
     return result

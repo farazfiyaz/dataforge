@@ -127,6 +127,17 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-09-28 — Upload no longer crashes on True/False columns or Excel year headers
+Two common file shapes returned a 500 error:
+- **Any True/False column** (e.g. `paid,True`): pandas counts bool as numeric, so
+  the profiler took IQR quantiles and numpy raised "boolean subtract is not
+  supported". Both upload and Auto Analyze failed. Bool columns are now profiled
+  as categorical (True/False counts).
+- **Excel sheets with year headers** (`2023`, `2024`): `read_excel` returns int
+  column names, and Auto Analyze crashed joining them into the cleaning report
+  and again when labelling the missing-values plot. Excel headers are now text,
+  the same as a CSV with the same header.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

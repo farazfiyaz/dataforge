@@ -41,12 +41,16 @@ def read_table(data: bytes, filename: str) -> pd.DataFrame:
 
 def _read_excel(data: bytes, ext: str) -> pd.DataFrame:
     try:
-        return pd.read_excel(io.BytesIO(data))
+        df = pd.read_excel(io.BytesIO(data))
     except ImportError:
         if ext == "xls":
             raise ValueError("Old-style .xls files need the 'xlrd' package "
                              "(pip install xlrd), or re-save the file as .xlsx.") from None
         raise
+    # Year headers (2023, 2024) come back as ints, which crash the cleaning
+    # report and plot labels; a CSV with the same header gives text "2023"
+    df.columns = [str(c) for c in df.columns]
+    return df
 
 
 def _read_text(data: bytes, ext: str) -> pd.DataFrame:

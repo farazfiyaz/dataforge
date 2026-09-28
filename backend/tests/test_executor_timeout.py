@@ -21,6 +21,9 @@ def short_timeout(monkeypatch):
     # generated code often wraps everything in a broad try/except
     "while True:\n    try:\n        x = 1\n    except Exception:\n        pass",
     "def spin():\n    while True:\n        pass\nspin()",
+    # a bare except catches BaseException too, and used to swallow the timeout forever
+    "while True:\n    try:\n        x = 1\n    except:\n        pass",
+    "for i in range(10**9):\n    try:\n        x = [1][0]\n    except:\n        continue",
 ])
 def test_infinite_loops_are_stopped(short_timeout, code):
     start = time.monotonic()
@@ -45,6 +48,20 @@ def test_trace_hook_is_removed_after_each_run(short_timeout):
 def test_normal_code_is_unaffected():
     result = executor.run_code("import numpy as np\nprint(int(np.arange(10).sum()))")
     assert result["error"] is None and result["stdout"].strip() == "45"
+
+
+def test_bare_except_does_not_swallow_timeout(short_timeout):
+    code = "try:\n    while True:\n        pass\nexcept:\n    print('caught')"
+    result = executor.run_code(code)
+    assert result["error"].startswith("ExecutionTimeout")
+    assert "caught" not in result["stdout"]
+
+
+def test_bare_except_still_catches_ordinary_errors():
+    code = "try:\n    1 / 0\nexcept:\n    print('handled')\nfor v in ['a']:\n    try:\n        int(v)\n    except:\n        print('bad', v)"
+    result = executor.run_code(code)
+    assert result["error"] is None
+    assert result["stdout"] == "handled\nbad a\n"
 
 
 def test_event_loop_stays_responsive_while_code_runs(short_timeout):

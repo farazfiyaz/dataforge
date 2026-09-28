@@ -127,11 +127,18 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-09-28 — A bare `except:` can no longer swallow the time limit
+The sandbox's `ExecutionTimeout` is a BaseException, so `except Exception:`
+can't catch it, but a bare `except:` can. `try: while True: pass / except: print('caught')`
+ran for 0.5s, printed "caught" and reported success. `while True: try: ... except: pass`
+hung past the limit (killed after 20s with a 0.5s limit): once the trace hook
+raises, CPython removes it. The sandbox now compiles bare `except:` as
+`except Exception:`, which still catches every ordinary error.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a
   hard memory limit and stopping long C-level operations).
-- A bare `except:` in generated code can still catch the timeout.
 - `/api/upload` reads the whole file into memory with no size limit.
 - Recommendations could offer "one-click run" instead of just filling the input.
 - Box plots with several boxes are summarised as one combined span; per-box medians/quartiles would be better.

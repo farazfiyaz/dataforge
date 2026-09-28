@@ -257,6 +257,19 @@ def run_code(
 MAX_ECHO_CHARS = 4000
 
 
+class _BareExceptToException(ast.NodeTransformer):
+    """
+    Rewrite `except:` as `except Exception:`. A bare except catches
+    ExecutionTimeout, and CPython drops the trace hook once it raises, so
+    `while True: try: ... except: pass` used to run forever.
+    """
+    def visit_ExceptHandler(self, node: ast.ExceptHandler):
+        self.generic_visit(node)
+        if node.type is None:
+            node.type = ast.copy_location(ast.Name(id="Exception", ctx=ast.Load()), node)
+        return node
+
+
 def _split_last_expression(code: str):
     """
     Notebook semantics: if the code ends with a bare expression (`df.head()`),
@@ -264,7 +277,7 @@ def _split_last_expression(code: str):
     write notebook-style code constantly; without this they get empty output
     back and repeat themselves.
     """
-    tree = ast.parse(code, SANDBOX_FILENAME)
+    tree = _BareExceptToException().visit(ast.parse(code, SANDBOX_FILENAME))
     if not tree.body or not isinstance(tree.body[-1], ast.Expr):
         return compile(tree, SANDBOX_FILENAME, "exec"), None
     last = tree.body.pop()

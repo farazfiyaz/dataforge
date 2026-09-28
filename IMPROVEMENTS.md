@@ -127,11 +127,18 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-09-29 — Upload size limit
+`/api/upload` and `/api/autoanalyze` read the whole file into memory with
+`await file.read()`, and parsing needs several times that again (decoded text,
+then the DataFrame). A multi-gigabyte CSV could exhaust a laptop's RAM and
+freeze the app with no message. Uploads are now read in 1 MB chunks and stopped
+at 200 MB (`DATAFORGE_MAX_UPLOAD_MB` to change it) with a 413 that names the
+file, the limit, and what to do. The existing frontend shows that message as-is.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a
   hard memory limit and stopping long C-level operations).
 - A bare `except:` in generated code can still catch the timeout.
-- `/api/upload` reads the whole file into memory with no size limit.
 - Recommendations could offer "one-click run" instead of just filling the input.
 - Box plots with several boxes are summarised as one combined span; per-box medians/quartiles would be better.

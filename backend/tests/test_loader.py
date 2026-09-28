@@ -28,6 +28,27 @@ def test_semicolon_separator_with_decimal_commas():
     assert df["price"].tolist() == [1.5, 2.75]
 
 
+def test_european_dates_are_not_read_as_numbers():
+    # thousands="." used to strip the dots: 01.02.2024 → 1022024
+    data = "Datum;Umsatz;Menge\n01.02.2024;1.234,50;3\n15.03.2024;99,90;1\n".encode("cp1252")
+    df = read_table(data, "umsatz.csv")
+    assert df["Datum"].tolist() == ["01.02.2024", "15.03.2024"]
+    assert df["Umsatz"].tolist() == [1234.5, 99.9]
+    assert df["Menge"].tolist() == [3, 1]
+
+
+def test_dotted_codes_beside_decimal_commas_stay_text():
+    df = read_table("id;version;preis\n1;1.2;3,5\n2;1.10;4,0\n".encode(), "x.csv")
+    assert df["version"].tolist() == ["1.2", "1.10"]
+    assert df["id"].tolist() == [1, 2]
+    assert df["preis"].tolist() == [3.5, 4.0]
+
+
+def test_european_thousands_with_missing_values():
+    df = read_table("a;b\n1.000,5;x\n;y\n-2.500.000;z\n".encode(), "x.csv")
+    assert df["a"].iloc[0] == 1000.5 and pd.isna(df["a"].iloc[1]) and df["a"].iloc[2] == -2500000
+
+
 def test_semicolon_separator_with_decimal_points():
     df = read_table("product;price\nA;1.50\nB;2.75\n".encode(), "x.csv")
     assert df["price"].tolist() == [1.5, 2.75]

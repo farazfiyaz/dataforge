@@ -127,6 +127,18 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-09-29 — train_model no longer crashes on 1/2 labels or rare classes
+`train_model` decided "binary" from the test split and called `roc_curve`
+without a positive label. Two common cases crashed after printing metrics:
+- a two-class target coded `1`/`2` → `ValueError: y_true takes value in {1, 2}`;
+- a three-class target whose rare class landed only in training: the test
+  split looked binary, so it printed a meaningless `ROC AUC: 0.379` from the
+  wrong probability column (accuracy was 1.000), then crashed the same way.
+Binary is now judged from the model's own classes, `roc_curve` gets
+`pos_label`, and the confusion matrix is built over every class seen, so the
+matrix and its tick labels always match. New `tests/test_model_report.py`
+(both tests fail without the fix).
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

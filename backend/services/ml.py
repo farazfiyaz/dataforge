@@ -150,7 +150,11 @@ def _report_classification(pipe, X_te, y_te, y_pred, label_encoder):
     print(f"Accuracy: {acc:.3f}  |  Precision: {prec:.3f}  |  "
           f"Recall: {rec:.3f}  |  F1: {f1:.3f}")
 
-    binary = len(np.unique(y_te)) == 2
+    # Binary means the *model* has two classes. The test split alone can miss a
+    # rare class, and predict_proba's second column is then not "the positive
+    # class" of y_te. Both test classes must be present for an ROC curve.
+    classes = pipe.named_steps["model"].classes_
+    binary = len(classes) == 2 and set(np.unique(y_te)) == set(classes)
     auc = None
     if binary and hasattr(pipe, "predict_proba"):
         proba = pipe.predict_proba(X_te)[:, 1]
@@ -160,9 +164,11 @@ def _report_classification(pipe, X_te, y_te, y_pred, label_encoder):
     fig, axes = plt.subplots(1, 3 if binary else 2, figsize=(15 if binary else 10, 4))
     fig.suptitle("Model diagnostics")
 
-    # confusion matrix
-    cm = confusion_matrix(y_te, y_pred)
-    labels = label_encoder.classes_ if label_encoder is not None else np.unique(y_te)
+    # confusion matrix, over every class seen in training or testing so the
+    # matrix and its tick labels always have the same size
+    label_ids = np.union1d(classes, np.unique(y_te))
+    cm = confusion_matrix(y_te, y_pred, labels=label_ids)
+    labels = label_encoder.classes_[label_ids] if label_encoder is not None else label_ids
     ax = axes[0]
     ax.imshow(cm, cmap="Blues")
     ax.set_xticks(range(len(labels)), labels, rotation=45, ha="right")
@@ -175,7 +181,7 @@ def _report_classification(pipe, X_te, y_te, y_pred, label_encoder):
 
     # ROC curve (binary only)
     if binary and auc is not None:
-        fpr, tpr, _ = roc_curve(y_te, proba)
+        fpr, tpr, _ = roc_curve(y_te, proba, pos_label=classes[1])
         axes[1].plot(fpr, tpr, color="#4f9cf9")
         axes[1].plot([0, 1], [0, 1], "--", color="gray")
         axes[1].set_title(f"ROC curve (AUC={auc:.3f})")

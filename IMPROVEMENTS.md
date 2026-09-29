@@ -127,6 +127,18 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-09-29 — Auto clean handles CSVs written with ", " separators
+In a file like `id, plan, age` every header and cell starts with a space. Auto
+clean trimmed cells only at the end, after the other steps had already run, so
+the downloaded CSV still had ` plan`/` age` headers. Blank cells came out as
+empty text instead of being filled. `age` stayed text during the median fill, so
+its gap was never filled, and a row differing only by `"basic "` vs `"basic"`
+wasn't removed as a duplicate. Now headers and cells are trimmed first,
+whitespace-only cells count as missing, and numeric text is converted before
+nulls and duplicates are handled. A header is not trimmed if that would give it
+the same name as another column. New `tests/test_cleaner_padded_csv.py`: 5 of
+its 6 tests failed before the fix.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a
@@ -135,3 +147,5 @@ Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally
 - `/api/upload` reads the whole file into memory with no size limit.
 - Recommendations could offer "one-click run" instead of just filling the input.
 - Box plots with several boxes are summarised as one combined span; per-box medians/quartiles would be better.
+- Uploads (`/api/upload`, agent `df`) still keep ", "-padded headers and cells
+  (` plan`, `" 34"` as text); the loader could read with `skipinitialspace=True`.

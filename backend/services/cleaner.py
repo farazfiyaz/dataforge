@@ -33,6 +33,55 @@ def auto_clean(df: pd.DataFrame) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
 
     original_shape = df.shape
 
+    # Tidy text first, so the steps below see real values. A CSV written with
+    # ", " separators pads every header and cell: " age" holds " 34" (text, so
+    # never median-filled), " " blanks aren't missing, and "pro " vs "pro"
+    # hides duplicate rows.
+
+    # 0a. Strip whitespace from column names (unless that would merge two)
+    stripped = [c.strip() if isinstance(c, str) else c for c in df.columns]
+    if stripped != list(df.columns) and len(set(stripped)) == len(stripped):
+        renamed = sum(a != b for a, b in zip(df.columns, stripped))
+        df.columns = stripped
+        report.append({
+            "step": "Trimmed spaces from column names",
+            "detail": f"Renamed {renamed} column(s)",
+            "impact": renamed,
+        })
+
+    # 0b. Strip whitespace from text cells and treat blank ones as missing
+    # (leaving missing values and non-string cells alone — astype(str)
+    # would turn NaN into the text "nan")
+    blanks = 0
+    for col in text_columns(df):
+        s = df[col].map(lambda v: v.strip() if isinstance(v, str) else v)
+        is_blank = s.map(lambda v: isinstance(v, str) and v == "")
+        blanks += int(is_blank.sum())
+        df[col] = s.mask(is_blank, np.nan)
+    if blanks:
+        report.append({
+            "step": "Treated blank cells as missing",
+            "detail": f"{blanks:,} empty or whitespace-only cell(s)",
+            "impact": blanks,
+        })
+
+    # 0c. Infer better dtypes (e.g. string numbers → int/float)
+    converted = []
+    for col in text_columns(df):
+        if df[col].isna().all():
+            continue
+        try:
+            df[col] = pd.to_numeric(df[col])
+            converted.append(str(col))
+        except (ValueError, TypeError):
+            pass
+    if converted:
+        report.append({
+            "step": "Converted string columns to numeric",
+            "detail": f"Converted: {', '.join(converted[:10])}",
+            "impact": len(converted),
+        })
+
     # 1. Drop fully empty columns
     empty_cols = [c for c in df.columns if df[c].isna().all()]
     if empty_cols:
@@ -95,26 +144,6 @@ def auto_clean(df: pd.DataFrame) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
             "step": "Filled categorical nulls with column mode",
             "detail": "; ".join(filled_cat[:10]) + ("…" if len(filled_cat) > 10 else ""),
             "impact": len(filled_cat),
-        })
-
-    # 6. Strip whitespace from string columns (leaving missing values and
-    # non-string cells alone — astype(str) would turn NaN into the text "nan")
-    for col in text_columns(df):
-        df[col] = df[col].map(lambda v: v.strip() if isinstance(v, str) else v)
-
-    # 7. Infer better dtypes (e.g. string numbers → int/float)
-    converted = []
-    for col in text_columns(df):
-        try:
-            df[col] = pd.to_numeric(df[col])
-            converted.append(col)
-        except (ValueError, TypeError):
-            pass
-    if converted:
-        report.append({
-            "step": "Converted string columns to numeric",
-            "detail": f"Converted: {', '.join(converted[:10])}",
-            "impact": len(converted),
         })
 
     final_shape = df.shape

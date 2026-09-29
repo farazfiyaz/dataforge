@@ -27,6 +27,7 @@ from typing import Any
 
 from services.chartsummary import describe_figure
 from services.datastore import get_dataset
+from services.eda import table_records
 from services.ml import train_model
 from services.workspace import list_files, load_file
 
@@ -208,7 +209,7 @@ def run_code(
 
         # A DataFrame the code ended on is what the user asked to see
         if isinstance(last_value, pd.DataFrame):
-            result["table"] = last_value.head(100).fillna("").to_dict(orient="records")
+            result["table"] = table_records(last_value, 100)
 
         # Otherwise prefer a DataFrame assigned in THIS run; fall back to any DataFrame
         new_keys = [k for k in local_ns.keys() if k not in keys_before]
@@ -216,7 +217,7 @@ def run_code(
         for key in scan if result["table"] is None else []:
             val = local_ns[key]
             if isinstance(val, pd.DataFrame):
-                result["table"] = val.head(100).fillna("").to_dict(orient="records")
+                result["table"] = table_records(val, 100)
                 break
 
         # Encode EVERY figure the code drew, not just the last one — code that

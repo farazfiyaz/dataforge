@@ -19,7 +19,7 @@ def run_eda(df: pd.DataFrame) -> dict[str, Any]:
         "shape": {"rows": len(df), "cols": len(df.columns)},
         "columns": [],
         "duplicates": int(df.duplicated().sum()),
-        "sample": df.head(5).fillna("").to_dict(orient="records"),
+        "sample": table_records(df, 5),
         "date_column": find_date_column(df),
     }
 
@@ -89,6 +89,28 @@ def find_date_column(df: pd.DataFrame) -> str | None:
                 return c
     return None
 
+
+
+def table_records(df: pd.DataFrame, n: int) -> list[dict]:
+    """
+    First n rows as JSON-ready records. Infinities (a spreadsheet's #DIV/0!
+    saved as "inf", or a ratio column divided by zero) are not valid JSON:
+    the API answered 500 and the browser couldn't parse the agent's stream.
+    They're shown as the text "inf" / "-inf" instead.
+    """
+    head = df.head(n).copy()
+    for i in range(head.shape[1]):
+        s = head.iloc[:, i]
+        if pd.api.types.is_float_dtype(s) and np.isinf(s).any():
+            head.isetitem(i, [("inf" if v > 0 else "-inf") if isinstance(v, float) and np.isinf(v) else v
+                              for v in s.astype(object)])
+    return head.fillna("").to_dict(orient="records")
+
+
+def finite(s: pd.Series) -> pd.Series:
+    """Non-missing, finite values — matplotlib refuses to bin a range that reaches inf."""
+    s = s.dropna()
+    return s[np.isfinite(s.astype(float))] if pd.api.types.is_float_dtype(s) else s
 
 
 def _safe(val) -> Any:

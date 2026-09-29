@@ -127,6 +127,17 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-09-29 — Don't crash on infinite values
+A CSV with `inf` in it (a spreadsheet's `#DIV/0!` saved as text, or a ratio
+column) made `/api/upload` and `/api/autoanalyze` answer 500: `inf` isn't valid
+JSON, so the profile's sample rows couldn't be sent, and matplotlib refused to
+draw histograms over a range reaching `inf`. The same went for code results:
+`df.a / df.b` with a zero in `b` put `inf` in the result table, which broke
+`/api/execute` and wrote `Infinity` into the agent's stream, which the browser
+can't parse. Tables and samples now show `"inf"` / `"-inf"` as text
+(`eda.table_records`), and Auto Analyze's histograms, box plots and heatmap
+leave infinite values out. The data itself is unchanged.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a
@@ -135,3 +146,5 @@ Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally
 - `/api/upload` reads the whole file into memory with no size limit.
 - Recommendations could offer "one-click run" instead of just filling the input.
 - Box plots with several boxes are summarised as one combined span; per-box medians/quartiles would be better.
+- A numeric column with any `inf` gets `mean`/`max` of null in the profile; stats over the
+  finite values plus an `inf_count` would be clearer (and Auto clean could treat inf as missing).

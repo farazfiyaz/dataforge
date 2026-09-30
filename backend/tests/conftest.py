@@ -19,3 +19,11 @@ APP_ORIGIN = "http://localhost:8000"
 @pytest.fixture
 def client():
     return TestClient(app, base_url=APP_ORIGIN)
+
+
+@pytest.fixture(autouse=True)
+def temp_settings(tmp_path, monkeypatch):
+    """Never read or write the user's real ~/.dataforge/settings.json in tests."""
+    from services import settings
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)

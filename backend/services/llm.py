@@ -4,12 +4,22 @@
 import os
 import httpx
 
+from services import settings
+
 OLLAMA_HOST     = "http://localhost:11434"
 OLLAMA_CHAT_URL = f"{OLLAMA_HOST}/api/chat"
-# Electron picks the model size that fits the machine's RAM (see electron/main.js
-# pickModel()) and passes it in via this env var; falls back to the 7B model when
-# run outside Electron (e.g. `python app.py` directly).
-DEFAULT_MODEL   = os.environ.get("DATAFORGE_MODEL", "qwen2.5-coder:7b")
+OLLAMA_TAGS_URL = f"{OLLAMA_HOST}/api/tags"
+# Which model answers (and the local default) lives in services/settings.py
+
+
+async def installed_models() -> list[str]:
+    """Models already downloaded into Ollama; empty if Ollama isn't running."""
+    try:
+        async with _client(5) as client:
+            resp = await client.get(OLLAMA_TAGS_URL)
+        return sorted(m["name"] for m in resp.json().get("models", []))
+    except (httpx.HTTPError, ValueError, KeyError):
+        return []
 
 
 class OllamaError(RuntimeError):
@@ -43,9 +53,10 @@ async def _post_chat(payload: dict, timeout: float) -> dict:
     return resp.json()
 
 
-async def call_ollama(system_prompt: str, user_message: str, model: str = DEFAULT_MODEL) -> str:
+async def call_ollama(system_prompt: str, user_message: str, model: str | None = None) -> str:
     """
-    Single-shot question → answer text.
+    Single-shot question → answer text, from the model chosen in Model
+    settings: the local Ollama model (default) or the opted-in cloud model.
 
     Uses /api/chat with real system/user roles, so Ollama applies the model's
     own chat template (the old /api/generate call hand-wrote `<|system|>` tags
@@ -55,17 +66,22 @@ async def call_ollama(system_prompt: str, user_message: str, model: str = DEFAUL
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_message},
     ]
-    data = await _post_chat({"model": model, "messages": messages, "stream": False}, timeout=180)
+    if settings.provider() == "claude":
+        return (await chat_ollama(messages)).get("content", "").strip()
+    data = await _post_chat({"model": model or settings.local_model(), "messages": messages, "stream": False},
+                            timeout=180)
     return (data.get("message") or {}).get("content", "").strip()
 
 
 async def chat_ollama(
     messages: list[dict],
     tools: list[dict] | None = None,
-    model: str = DEFAULT_MODEL,
+    model: str | None = None,
 ) -> dict:
     """
-    Multi-turn chat with native tool calling via Ollama's /api/chat.
+    Multi-turn chat with native tool calling via Ollama's /api/chat, or via
+    the Anthropic API when the user has switched to the cloud model (the
+    message shape below is the same either way).
 
     messages: [{"role": "system"|"user"|"assistant"|"tool", "content": "..."}]
               Assistant messages may carry "tool_calls"; tool results are sent
@@ -75,8 +91,12 @@ async def chat_ollama(
     Returns the assistant message dict:
         {"role": "assistant", "content": "...", "tool_calls": [...]?}
     """
+    if settings.provider() == "claude":
+        from services import claude   # the cloud path is opt-in; keep it out of local startup
+        return await claude.chat(messages, tools, settings.claude_model(), settings.claude_api_key())
+
     payload: dict = {
-        "model": model,
+        "model": model or settings.local_model(),
         "messages": messages,
         "stream": False,
     }

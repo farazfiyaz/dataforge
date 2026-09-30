@@ -127,6 +127,18 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-09-30 — Model settings: bigger local models, optional cloud (Claude)
+A **Model** button chooses who answers:
+- **This computer (default):** any model installed in Ollama, with suggestions for
+  stronger ones to download (`qwen2.5-coder:14b` / `:32b`).
+- **Cloud (opt-in):** Claude via the Anthropic API (Opus 5 by default, or Sonnet 5 or
+  Haiku 4.5) with the user's own key. It warns what is sent, and the input hint and
+  welcome text change so it's always visible that cloud mode is on. The key is kept in
+  `~/.dataforge/settings.json` and never returned to the page.
+`services/claude.py` translates the agent's Ollama-style conversation to the Messages API
+and back, echoing Claude's raw blocks (thinking included) unchanged. Opus 5 uses
+server-side refusal fallbacks. Errors (bad key, rate limit, offline) become plain messages.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

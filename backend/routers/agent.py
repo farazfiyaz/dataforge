@@ -360,7 +360,15 @@ async def agent(req: AgentRequest):
             if tool_calls:
                 # store the normalized call so the model's history shows correct usage
                 tool_calls = _normalize_calls(tool_calls)
+                raw = assistant.get("claude_content")
                 assistant = {"role": "assistant", "content": "", "tool_calls": tool_calls}
+                # Cloud replies carry their original blocks (thinking included),
+                # which must be echoed back unchanged: keep them unless
+                # normalizing changed what's being called
+                raw_calls = [b for b in raw or [] if b.get("type") == "tool_use"]
+                if raw and len(raw_calls) == len(tool_calls) and all(
+                        b["name"] == c["function"]["name"] for b, c in zip(raw_calls, tool_calls)):
+                    assistant["claude_content"] = raw
             messages.append(assistant)
 
             # No tool call → model is done; its content is the final answer

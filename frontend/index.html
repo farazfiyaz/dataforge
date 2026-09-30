@@ -177,6 +177,23 @@ button { cursor: pointer; }
 .field-hint { font-weight: 400; color: var(--ink-3); }
 .modal input:focus { outline: 2px solid var(--field-text); outline-offset: -1px; }
 .modal-actions { display: flex; gap: 8px; margin-top: 24px; justify-content: flex-end; }
+/* Model settings */
+.modal.wide { width: min(520px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; }
+.modal select {
+  width: 100%; height: 42px; padding: 0 10px;
+  background: var(--paper); border: 1px solid var(--rule-strong); border-radius: 0; font-size: 15px;
+}
+.modal select:focus { outline: 2px solid var(--field-text); outline-offset: -1px; }
+.provider-choice { border: 0; border-top: 1px solid var(--rule-strong); margin-bottom: 20px; }
+.provider-choice legend { padding: 12px 0 0; }
+.choice { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--rule); cursor: pointer; }
+.choice input { width: auto; height: auto; margin-top: 4px; accent-color: var(--field); }
+.choice strong { font-weight: 600; }
+.choice .field-hint { display: block; font-size: 13px; margin-top: 1px; }
+.field-note { margin-top: 6px; font-size: 13px; color: var(--ink-3); }
+.field-note code { font-family: var(--mono); font-size: 12px; }
+.cloud-warning { margin-bottom: 16px; padding: 10px 12px; border-left: 3px solid var(--field); background: var(--field-tint); font-size: 13px; color: var(--ink-2); }
+.input-hint.cloud { color: var(--field-text); }
 
 /* ── Buttons ── */
 .btn {
@@ -565,6 +582,7 @@ button { cursor: pointer; }
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
   <symbol id="i-plus" viewBox="0 0 256 256"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></symbol>
   <symbol id="i-paperclip" viewBox="0 0 256 256"><path d="M209.66,122.34a8,8,0,0,1,0,11.32l-82.05,82a56,56,0,0,1-79.2-79.21L147.67,35.73a40,40,0,1,1,56.61,56.55L105,193A24,24,0,1,1,71,159L154.3,74.38A8,8,0,1,1,165.7,85.6L82.39,170.31a8,8,0,1,0,11.27,11.36L192.93,81A24,24,0,1,0,159,47L59.76,147.68a40,40,0,1,0,56.53,56.62l82.06-82A8,8,0,0,1,209.66,122.34Z"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 256 256"><path d="M152,96H104a8,8,0,0,0-8,8v48a8,8,0,0,0,8,8h48a8,8,0,0,0,8-8V104A8,8,0,0,0,152,96Zm-8,48H112V112h32Zm88,0H216V112h16a8,8,0,0,0,0-16H216V56a16,16,0,0,0-16-16H160V24a8,8,0,0,0-16,0V40H112V24a8,8,0,0,0-16,0V40H56A16,16,0,0,0,40,56V96H24a8,8,0,0,0,0,16H40v32H24a8,8,0,0,0,0,16H40v40a16,16,0,0,0,16,16H96v16a8,8,0,0,0,16,0V216h32v16a8,8,0,0,0,16,0V216h40a16,16,0,0,0,16-16V160h16a8,8,0,0,0,0-16Zm-32,56H56V56H200Z"/></symbol>
   <symbol id="i-folder-open" viewBox="0 0 256 256"><path d="M245,110.64A16,16,0,0,0,232,104H216V88a16,16,0,0,0-16-16H130.67L102.94,51.2a16.14,16.14,0,0,0-9.6-3.2H40A16,16,0,0,0,24,64V208h0a8,8,0,0,0,8,8H211.1a8,8,0,0,0,7.59-5.47l28.49-85.47A16.05,16.05,0,0,0,245,110.64ZM93.34,64,123.2,86.4A8,8,0,0,0,128,88h72v16H69.77a16,16,0,0,0-15.18,10.94L40,158.7V64Zm112,136H43.1l26.67-80H232Z"/></symbol>
   <symbol id="i-arrow-up" viewBox="0 0 256 256"><path d="M205.66,117.66a8,8,0,0,1-11.32,0L136,59.31V216a8,8,0,0,1-16,0V59.31L61.66,117.66a8,8,0,0,1-11.32-11.32l72-72a8,8,0,0,1,11.32,0l72,72A8,8,0,0,1,205.66,117.66Z"/></symbol>
   <symbol id="i-copy" viewBox="0 0 256 256"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></symbol>
@@ -613,6 +631,43 @@ button { cursor: pointer; }
   </div>
 </div>
 
+<div class="modal-overlay" id="model-modal" style="display:none" role="dialog" aria-modal="true" aria-labelledby="model-modal-title">
+  <div class="modal wide">
+    <h3 id="model-modal-title">Model</h3>
+    <fieldset class="provider-choice">
+      <legend class="field-label">Which AI answers your questions</legend>
+      <label class="choice"><input type="radio" name="provider" value="local" />
+        <span><strong>This computer</strong> (Ollama)<span class="field-hint">Private: your data never leaves your machine. Free, works offline.</span></span></label>
+      <label class="choice"><input type="radio" name="provider" value="claude" />
+        <span><strong>Cloud</strong> (Claude by Anthropic)<span class="field-hint">Much smarter and faster. Needs internet and an API key; billed per use.</span></span></label>
+    </fieldset>
+    <div id="local-fields">
+      <div class="field">
+        <label class="field-label" for="local-model-select">Local model</label>
+        <select id="local-model-select"></select>
+        <p class="field-note" id="local-suggest"></p>
+      </div>
+    </div>
+    <div id="cloud-fields">
+      <p class="cloud-warning" role="note">In cloud mode your questions, the dataset's column names and sample values, and everything the analysis prints (which can include rows of your data) are sent to Anthropic to be answered. The file itself isn't uploaded.</p>
+      <div class="field">
+        <label class="field-label" for="claude-model-select">Claude model</label>
+        <select id="claude-model-select"></select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="claude-key-input">Anthropic API key <span class="field-hint" id="key-hint"></span></label>
+        <input type="password" id="claude-key-input" autocomplete="off" spellcheck="false" placeholder="sk-ant-…" />
+        <p class="field-note">Saved only on this computer. Create one at console.anthropic.com.</p>
+      </div>
+    </div>
+    <p class="msg-body error-text" id="model-error" role="alert" hidden></p>
+    <div class="modal-actions">
+      <button class="btn quiet" id="model-cancel">Cancel</button>
+      <button class="btn primary" id="model-save">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Main -->
 <main id="main">
 
@@ -629,7 +684,7 @@ button { cursor: pointer; }
   <!-- Empty state -->
   <div id="welcome">
     <div class="welcome-inner">
-      <h1><span>Ask your data anything.</span><span>It never leaves this computer.</span></h1>
+      <h1><span>Ask your data anything.</span><span id="welcome-privacy">It never leaves this computer.</span></h1>
       <p class="lede">Attach a CSV or Excel file and ask in plain language. DataForge writes the Python, runs it, fixes its own errors, and shows you every step.</p>
       <div class="welcome-actions">
         <button class="btn primary" id="welcome-attach"><svg class="ic" aria-hidden="true"><use href="#i-paperclip"/></svg>Attach a dataset</button>
@@ -674,6 +729,7 @@ button { cursor: pointer; }
           <div class="input-left">
             <button class="tool-btn" id="attach-btn" title="Attach a CSV or Excel file"><svg class="ic" aria-hidden="true"><use href="#i-paperclip"/></svg>Attach</button>
             <button class="tool-btn" id="workspace-btn" title="Choose a folder the agent can browse and load files from"><svg class="ic" aria-hidden="true"><use href="#i-folder-open"/></svg>Workspace</button>
+            <button class="tool-btn" id="model-btn" title="Choose which AI model answers"><svg class="ic" aria-hidden="true"><use href="#i-cpu"/></svg><span id="model-btn-label">Model</span></button>
             <input type="file" id="file-input" accept=".csv,.tsv,.txt,.xlsx,.xls" />
             <span class="divider" aria-hidden="true"></span>
             <div class="modes" role="radiogroup" aria-label="Mode">
@@ -1198,7 +1254,7 @@ async function sendChat(text, fileRef, mode) {
     saveCurrentChat();
   } catch (e) {
     hideTyping(assistantTurn);
-    appendError(assistantTurn, `No answer from the local model: ${e.message}`);
+    appendError(assistantTurn, `No answer from the model: ${e.message}`);
   } finally {
     state.streaming = false;
     updateSendBtn();
@@ -1751,6 +1807,117 @@ function scrollBottom() {
     _scrollQueued = false;
   });
 }
+// ── Model settings (local Ollama by default; Claude in the cloud if opted in) ──
+const modelModal = document.getElementById("model-modal");
+const inputHint = document.querySelector(".input-hint");
+const DEFAULT_INPUT_HINT = inputHint.textContent;
+let modelSettings = null;
+let modelReturnFocus = null;
+
+function claudeName(s) {
+  const m = s.claude_models.find(x => x.id === s.claude_model);
+  return m ? m.label.split(" — ")[0] : s.claude_model;
+}
+
+function renderModelStatus() {
+  const label = document.getElementById("model-btn-label");
+  if (modelSettings?.provider === "claude") {
+    label.textContent = "Cloud";
+    inputHint.textContent = `Cloud mode: questions and results are sent to Anthropic (${claudeName(modelSettings)}). Shift + Enter for a new line.`;
+    inputHint.classList.add("cloud");
+    document.getElementById("welcome-privacy").textContent = `Answered by ${claudeName(modelSettings)} in the cloud.`;
+  } else {
+    document.getElementById("welcome-privacy").textContent = "It never leaves this computer.";
+    label.textContent = "Model";
+    inputHint.textContent = modelSettings
+      ? `Everything runs on this computer (${modelSettings.local_model}). Shift + Enter for a new line.`
+      : DEFAULT_INPUT_HINT;
+    inputHint.classList.remove("cloud");
+  }
+}
+
+async function loadModelSettings() {
+  try {
+    const res = await fetch(`${API}/settings/`);
+    if (res.ok) modelSettings = await res.json();
+  } catch { /* backend not up yet; keep the default hint */ }
+  renderModelStatus();
+}
+
+function showProviderFields() {
+  const cloud = document.querySelector('input[name="provider"]:checked')?.value === "claude";
+  document.getElementById("local-fields").hidden = cloud;
+  document.getElementById("cloud-fields").hidden = !cloud;
+}
+
+async function openModelModal() {
+  await loadModelSettings();
+  const s = modelSettings;
+  if (!s) return;
+  modelReturnFocus = document.activeElement;
+  document.querySelector(`input[name="provider"][value="${s.provider}"]`).checked = true;
+
+  const local = document.getElementById("local-model-select");
+  const names = s.local_models.includes(s.local_model) ? s.local_models : [s.local_model, ...s.local_models];
+  local.innerHTML = names.map(n =>
+    `<option value="${escHtml(n)}">${escHtml(n)}${s.local_models.includes(n) ? "" : " (not downloaded yet)"}</option>`).join("");
+  local.value = s.local_model;
+  document.getElementById("local-suggest").innerHTML = s.suggested_local_models.length
+    ? "For better answers you can download a bigger model: " + s.suggested_local_models.map(m =>
+        `<code>ollama pull ${escHtml(m.name)}</code> (${escHtml(m.note)})`).join(", ") + ". It then appears in this list."
+    : "";
+
+  const cloud = document.getElementById("claude-model-select");
+  cloud.innerHTML = s.claude_models.map(m => `<option value="${escHtml(m.id)}">${escHtml(m.label)}</option>`).join("");
+  cloud.value = s.claude_model;
+  document.getElementById("key-hint").textContent = s.has_api_key
+    ? (s.api_key_from_env ? "(using ANTHROPIC_API_KEY)" : `(saved key ${s.api_key_hint}; leave blank to keep it)`)
+    : "";
+  document.getElementById("claude-key-input").value = "";
+  document.getElementById("model-error").hidden = true;
+
+  showProviderFields();
+  modelModal.style.display = "flex";
+  setTimeout(() => document.querySelector('input[name="provider"]:checked').focus(), 50);
+}
+
+function closeModelModal() {
+  modelModal.style.display = "none";
+  modelReturnFocus?.focus?.();
+}
+
+async function saveModelSettings() {
+  const body = {
+    provider: document.querySelector('input[name="provider"]:checked').value,
+    local_model: document.getElementById("local-model-select").value,
+    claude_model: document.getElementById("claude-model-select").value,
+  };
+  const key = document.getElementById("claude-key-input").value.trim();
+  if (key) body.claude_api_key = key;
+  const err = document.getElementById("model-error");
+  try {
+    const res = await fetch(`${API}/settings/`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Couldn't save the settings.");
+    modelSettings = data;
+    renderModelStatus();
+    closeModelModal();
+  } catch (e) {
+    err.textContent = e.message;
+    err.hidden = false;
+  }
+}
+
+document.getElementById("model-btn").addEventListener("click", openModelModal);
+document.getElementById("model-cancel").addEventListener("click", closeModelModal);
+document.getElementById("model-save").addEventListener("click", saveModelSettings);
+document.querySelectorAll('input[name="provider"]').forEach(r => r.addEventListener("change", showProviderFields));
+modelModal.addEventListener("keydown", e => { if (e.key === "Escape") closeModelModal(); });
+modelModal.addEventListener("click", e => { if (e.target === modelModal) closeModelModal(); });
+loadModelSettings();
+
 function escHtml(s) {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }

@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 import os
 
-from routers import upload, chat, execute, autoanalyze, agent
+from routers import upload, chat, execute, autoanalyze, agent, settings
 
 HOST = "127.0.0.1"
 PORT = 8000
@@ -50,6 +50,7 @@ app.include_router(chat.router,        prefix="/api/chat",        tags=["chat"])
 app.include_router(execute.router,     prefix="/api/execute",     tags=["execute"])
 app.include_router(autoanalyze.router, prefix="/api/autoanalyze", tags=["autoanalyze"])
 app.include_router(agent.router,       prefix="/api/agent",       tags=["agent"])
+app.include_router(settings.router,    prefix="/api/settings",    tags=["settings"])
 
 # Serve frontend
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")

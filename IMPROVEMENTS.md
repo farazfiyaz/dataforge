@@ -127,6 +127,14 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-09-30 — Workspace `load_file` accepts the agent's pandas options
+Sniffing only ran when `load_file` got no options. With any keyword, CSVs went to a
+bare `pd.read_csv` with a forced `sep`, so `load_file("x.csv", sep=";")` raised
+"got multiple values for keyword argument 'sep'", `delimiter=";"` raised "Specified
+a sep and a delimiter", and `usecols=`/`nrows=` on an Excel-on-Windows (cp1252) file
+raised `UnicodeDecodeError`. Now the caller's `sep`/`delimiter`/`encoding` win, and
+whatever they leave out is still sniffed. Tests in `test_workspace_load_file.py`.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

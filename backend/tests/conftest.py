@@ -19,3 +19,10 @@ APP_ORIGIN = "http://localhost:8000"
 @pytest.fixture
 def client():
     return TestClient(app, base_url=APP_ORIGIN)
+
+
+@pytest.fixture(autouse=True)
+def temp_outputs(tmp_path, monkeypatch):
+    """Saved charts/tables go to a temp folder, never the user's Documents."""
+    from services import outputs
+    monkeypatch.setattr(outputs, "OUTPUT_ROOT", tmp_path / "outputs")

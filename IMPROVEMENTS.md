@@ -127,6 +127,16 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-09-30 — Download buttons, tables in answers, auto-save to Documents\DataForge
+- Every chart has **Download PNG**; every result table (and table in an answer) has **Download CSV**.
+- Answers render Markdown tables as real tables, and the model is told to use tables
+  when listing values per group.
+- Charts, tables produced by the code, and Auto Analyze's cleaned data and charts are
+  saved to `Documents/DataForge/<date>/`, each shown with a "Saved to … · Open folder"
+  note. Only tables made in that step are saved (not the unchanged dataset every step).
+  The files are the user's to delete: the folder is recreated on the next save, and a
+  failed save is skipped, never an error. Folder: `DATAFORGE_OUTPUT_DIR`.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a
@@ -135,3 +145,4 @@ Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally
 - `/api/upload` reads the whole file into memory with no size limit.
 - Recommendations could offer "one-click run" instead of just filling the input.
 - Box plots with several boxes are summarised as one combined span; per-box medians/quartiles would be better.
+- Live: for "churn rate per plan as a bar chart" the model ran `sns.barplot(y='churn', estimator=...)` on the yes/no text column, giving an empty chart (the table was right). Tell it to compute the rate first and plot that.

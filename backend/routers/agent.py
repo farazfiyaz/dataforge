@@ -113,7 +113,9 @@ Big datasets — be memory- and output-conscious:
 - Prefer vectorized pandas/numpy operations over Python loops.
 
 When you have fully answered the user's question, reply with plain text (no tool call):
-a concise summary of what you found, including concrete numbers.
+a concise summary of what you found, including concrete numbers. When the answer lists
+values for several items or groups (e.g. a rate per plan, metrics per model), put them
+in a Markdown table (| column | column |) so they're easy to compare.
 
 Dataset schema:
 {schema}
@@ -400,6 +402,7 @@ async def agent(req: AgentRequest):
                     "table": result.get("table"),
                     "charts": result.get("charts"),
                     "error": result.get("error"),
+                    "saved": result.get("saved"),
                     "retrying": bool(result.get("error")),
                 })
 

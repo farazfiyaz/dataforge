@@ -127,6 +127,14 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-10-01 — Keep follow-up suggestions after the agent reshapes `df`
+Suggestions after an agent answer are built from the session's `df` as the agent
+left it. If a step added a list column (`df["words"] = df["text"].str.split()`)
+or a duplicate column name (`pd.concat([df, df[["plan"]]], axis=1)`), every rule
+raised (`unhashable type: 'list'`, "truth value of a Series is ambiguous"), the
+error was swallowed, and the suggestions silently vanished. `recommend()` now
+keeps the first column of each name and skips columns whose values can't be counted.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

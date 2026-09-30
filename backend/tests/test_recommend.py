@@ -131,3 +131,21 @@ def test_agent_without_data_sends_no_recommendations(client, monkeypatch):
 
     res = client.post("/api/agent/", json={"message": "hello"}, headers={"Origin": APP_ORIGIN})
     assert [e for e, _ in _events(res)] == ["start", "final"]
+
+
+def test_list_valued_column_does_not_hide_suggestions():
+    # the agent ran df["words"] = df["plan"].str.split("r") — lists can't be counted
+    df = _churn_df()
+    df["words"] = df["plan"].str.split("r")
+    recs = recommend(df)
+    assert recs[0]["id"] == "predict-target"
+    assert all("words" not in r["prompt"] for r in recs)
+
+
+def test_duplicate_column_names_do_not_hide_suggestions():
+    # the agent ran pd.concat([df, df[["plan"]]], axis=1)
+    df = _churn_df()
+    df = pd.concat([df, df[["plan"]]], axis=1)
+    recs = recommend(df)
+    assert recs[0]["id"] == "predict-target"
+    assert "segment-target" in _ids(recs)

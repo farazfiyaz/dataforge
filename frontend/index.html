@@ -1201,15 +1201,10 @@ async function submit() {
   }
 
   const mode = modeSelect.value;
-  if (!fileRef && (mode === "code" || mode === "plot")) {
-    showNeedsFile(addAssistantTurn(), NEEDS_FILE);
-    return;
-  }
+  // With no file, the backend answers general questions and replies
+  // "needs_file" only when the question needs the user's data
   await sendChat(text, fileRef, mode);
 }
-
-const NEEDS_FILE = "There's no file attached, so there's no data to work on yet. " +
-  "Attach a CSV or Excel file and ask again, or switch to Explain mode for general questions.";
 
 function showNeedsFile(turn, message) {
   appendText(turn, message);
@@ -1259,6 +1254,11 @@ async function sendChat(text, fileRef, mode) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Chat error");
+    if (data.needs_file) {
+      hideTyping(assistantTurn);
+      showNeedsFile(assistantTurn, data.response);
+      return;
+    }
 
     hideTyping(assistantTurn);
     const full = data.response || "";

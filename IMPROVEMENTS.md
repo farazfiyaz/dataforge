@@ -128,11 +128,12 @@ as the final answer. Now:
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
 ### 2026-09-28 — "No file attached" message and a Stop button
-- Asking the agent something with no data used to let the model write code
-  against a `df` that doesn't exist. Now the backend answers immediately, without
-  calling the model: "There's no file attached…", with an Attach button. It gives a
-  separate message when a restored chat's file is gone after a restart. Code and
-  Plot modes check in the frontend; Explain still works without a file.
+- With no file attached, general questions ("what is a p-value?", "write code for
+  a moving average") are answered normally, in any mode, with no code execution.
+  Questions that need the user's data get "There's no file attached, and this
+  question needs your data" plus an Attach button; the model signals this with a
+  marker. There's a separate message when a restored chat's file is gone after a restart.
+  Live, qwen2.5-coder:7b classified 7 of 8 test questions as expected.
 - While a reply is in progress, the send button becomes Stop (Esc also works).
   Stopping aborts the request; the backend cancels the run and drops the unfinished
   turn from the agent's memory, so the next question starts clean.

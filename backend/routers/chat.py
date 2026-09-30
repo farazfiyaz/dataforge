@@ -3,6 +3,7 @@
 # License: AGPL-3.0 — see LICENSE
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from services import nodata
 from services.llm import OllamaError, call_ollama
 from typing import Optional
 
@@ -19,12 +20,16 @@ async def chat(req: ChatRequest):
     Call Ollama and return the full response as JSON.
     """
     system_prompt = build_system_prompt(req.mode, req.context)
+    if not req.context:        # no file attached
+        system_prompt += "\n\n" + nodata.RULE
     try:
         response = await call_ollama(system_prompt, req.message)
     except OllamaError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Ollama error: {e}")
+    if not req.context and nodata.needs_file(response):
+        return {"response": nodata.NEEDS_FILE, "needs_file": True}
     return {"response": response}
 
 def build_system_prompt(mode: str, context: Optional[str]) -> str:

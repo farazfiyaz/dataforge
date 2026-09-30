@@ -93,7 +93,8 @@ async def chat_ollama(
     """
     if settings.provider() == "claude":
         from services import claude   # the cloud path is opt-in; keep it out of local startup
-        return await claude.chat(messages, tools, settings.claude_model(), settings.claude_api_key())
+        return await claude.chat(messages, tools, settings.claude_model(), settings.claude_api_key(),
+                                 web_search=settings.web_search())
 
     payload: dict = {
         "model": model or settings.local_model(),

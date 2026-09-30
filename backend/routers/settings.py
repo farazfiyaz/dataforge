@@ -26,6 +26,7 @@ class SettingsUpdate(BaseModel):
     local_model: Optional[str] = None
     claude_model: Optional[str] = None
     claude_api_key: Optional[str] = None   # "" clears the saved key
+    web_search: Optional[bool] = None
 
 
 @router.get("/")

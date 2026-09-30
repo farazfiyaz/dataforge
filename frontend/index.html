@@ -194,6 +194,17 @@ button { cursor: pointer; }
 .field-note code { font-family: var(--mono); font-size: 12px; }
 .cloud-warning { margin-bottom: 16px; padding: 10px 12px; border-left: 3px solid var(--field); background: var(--field-tint); font-size: 13px; color: var(--ink-2); }
 .input-hint.cloud { color: var(--field-text); }
+.toggle-row { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--rule); cursor: pointer; }
+.toggle-row input { width: auto; height: auto; margin-top: 4px; accent-color: var(--field); }
+.toggle-row strong { font-weight: 600; }
+.toggle-row .field-hint { display: block; font-size: 13px; margin-top: 1px; }
+/* Web searches and sources shown with an answer */
+.web-note { margin: 8px 0 10px; font-size: 13px; color: var(--ink-2); }
+.web-note .web-label { font-weight: 600; }
+.web-note ul { margin: 4px 0 0; padding-left: 18px; }
+.web-note li { margin: 2px 0; }
+.web-note a { color: var(--field-text); }
+.web-note .muted { color: var(--ink-3); }
 
 /* ── Buttons ── */
 .btn {
@@ -666,6 +677,9 @@ button { cursor: pointer; }
         <p class="field-note">Saved only on this computer. Create one at console.anthropic.com.</p>
       </div>
     </div>
+    <label class="toggle-row"><input type="checkbox" id="web-search-toggle" />
+      <span><strong>Search the web</strong> for questions it can't answer from memory
+        <span class="field-hint">Only the search words are sent (to DuckDuckGo on this computer, or Anthropic's search in cloud mode), never your data. Off by default.</span></span></label>
     <p class="msg-body error-text" id="model-error" role="alert" hidden></p>
     <div class="modal-actions">
       <button class="btn quiet" id="model-cancel">Cancel</button>
@@ -1024,6 +1038,7 @@ function replayMessage(msg) {
     const turn = addAssistantTurn();
     renderAssistantContent(turn, msg.text, state.file);
     if (msg.edaProfile) renderEdaResponse(turn, msg.edaProfile, msg.filename);
+    showSources(turn, msg.sources);
     if (msg.recs?.items?.length) renderRecommendations(turn, msg.recs.items, { stuck: msg.recs.stuck });
     return turn;
   }
@@ -1277,6 +1292,43 @@ function showNeedsFile(turn, message) {
   scrollBottom();
 }
 
+function linkList(items) {
+  const ul = document.createElement("ul");
+  items.forEach(r => {
+    const li = document.createElement("li");
+    const a = document.createElement("a");
+    a.href = r.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+    a.textContent = r.title || r.url;
+    li.appendChild(a);
+    ul.appendChild(li);
+  });
+  return ul;
+}
+// "Searched the web for …" with the links it read (local model's web_search tool)
+function showSearch(turn, data) {
+  const note = document.createElement("div");
+  note.className = "web-note";
+  note.innerHTML = `<span class="web-label">Searched the web</span> for “${escHtml(data.query)}”`;
+  if (data.error) {
+    note.insertAdjacentHTML("beforeend", ` <span class="muted">— ${escHtml(data.error)}</span>`);
+  } else if (!data.results?.length) {
+    note.insertAdjacentHTML("beforeend", ` <span class="muted">— no results</span>`);
+  } else {
+    note.appendChild(linkList(data.results));
+  }
+  turn.appendChild(note);
+  scrollBottom();
+}
+// Pages a cloud answer drew on (Claude's web search)
+function showSources(turn, sources) {
+  if (!sources?.length) return;
+  const note = document.createElement("div");
+  note.className = "web-note";
+  note.innerHTML = `<span class="web-label">Sources</span>`;
+  note.appendChild(linkList(sources));
+  turn.appendChild(note);
+}
+
 function showStopped(turn) {
   // a step that was mid-run when stopped
   turn.querySelectorAll(".agent-step-label").forEach(label => {
@@ -1413,9 +1465,12 @@ async function sendAgent(text, fileRef) {
         } else if (ev === "result") {
           finishAgentStep(currentStep, data);
           showTyping(turn, data.error ? "Revising the code" : "Thinking about the next step");
+        } else if (ev === "search") {
+          showSearch(turn, data);
         } else if (ev === "final") {
           renderAssistantContent(turn, data.content || "", fileRef || state.file);
-          state.messages.push({ role: "assistant", text: data.content || "" });
+          showSources(turn, data.sources);
+          state.messages.push({ role: "assistant", text: data.content || "", sources: data.sources || null });
           saveCurrentChat();
         } else if (ev === "recommendations") {
           renderRecommendations(turn, data.items, { stuck: data.stuck });
@@ -1909,7 +1964,9 @@ function renderModelStatus() {
     document.getElementById("welcome-privacy").textContent = "It never leaves this computer.";
     label.textContent = "Model";
     inputHint.textContent = modelSettings
-      ? `Everything runs on this computer (${modelSettings.local_model}). Shift + Enter for a new line.`
+      ? (modelSettings.web_search
+          ? `Runs on this computer (${modelSettings.local_model}); web search is on, so search words go to DuckDuckGo. Shift + Enter for a new line.`
+          : `Everything runs on this computer (${modelSettings.local_model}). Shift + Enter for a new line.`)
       : DEFAULT_INPUT_HINT;
     inputHint.classList.remove("cloud");
   }
@@ -1953,6 +2010,7 @@ async function openModelModal() {
     ? (s.api_key_from_env ? "(using ANTHROPIC_API_KEY)" : `(saved key ${s.api_key_hint}; leave blank to keep it)`)
     : "";
   document.getElementById("claude-key-input").value = "";
+  document.getElementById("web-search-toggle").checked = !!s.web_search;
   document.getElementById("model-error").hidden = true;
 
   showProviderFields();
@@ -1970,6 +2028,7 @@ async function saveModelSettings() {
     provider: document.querySelector('input[name="provider"]:checked').value,
     local_model: document.getElementById("local-model-select").value,
     claude_model: document.getElementById("claude-model-select").value,
+    web_search: document.getElementById("web-search-toggle").checked,
   };
   const key = document.getElementById("claude-key-input").value.trim();
   if (key) body.claude_api_key = key;

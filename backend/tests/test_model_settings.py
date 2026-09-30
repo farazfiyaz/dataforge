@@ -78,7 +78,7 @@ def test_local_model_setting_is_used(monkeypatch):
 
 def test_cloud_setting_routes_to_claude(monkeypatch):
     seen = {}
-    async def fake_claude(messages, tools, model, api_key):
+    async def fake_claude(messages, tools, model, api_key, web_search=False):
         seen.update(model=model, api_key=api_key, tools=tools)
         return {"role": "assistant", "content": "from claude"}
     async def no_ollama(*a, **k):

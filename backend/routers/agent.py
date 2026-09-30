@@ -29,7 +29,7 @@ from pydantic import BaseModel
 from services.llm import OllamaError, chat_ollama
 from services.datastore import get_dataset, has_dataset
 from services.executor import run_code_async, reset_session, peek_session_df
-from services import nodata
+from services import nodata, settings, websearch
 from services.recommend import recommend
 from services.workspace import set_workspace, get_workspace
 
@@ -275,25 +275,61 @@ async def _file_gone(session_id: str):
     yield _sse("needs_file", {"message": nodata.NEEDS_FILE_STALE})
 
 
-async def _answer_without_data(session_id: str, message: str):
-    """No file: answer general questions (no tools), or say the data is needed."""
-    yield _sse("start", {"session_id": session_id})
-    history = _CONVERSATIONS.get(session_id) or [{"role": "system", "content": nodata.GENERAL_SYSTEM_PROMPT}]
-    history = history + [{"role": "user", "content": message}]
+def _local_web_tools() -> list[dict]:
+    """The local model's web_search tool, when the user has allowed web search.
+    (In cloud mode Claude's own web search is used instead, see services/claude.py.)"""
+    return [websearch.TOOL] if settings.web_search() and settings.provider() == "local" else []
+
+
+async def _web_search_call(fn: dict) -> tuple[str, str]:
+    """Run one web_search call → (SSE event for the UI, tool message content for the model)."""
+    args = fn.get("arguments") or {}
+    query = (args.get("query") if isinstance(args, dict) else str(args)) or ""
     try:
-        reply = await chat_ollama(history)
-    except OllamaError as e:
-        yield _sse("error", {"message": str(e)})
-        return
-    except Exception as e:
-        yield _sse("error", {"message": f"Ollama error: {e}"})
-        return
+        results = await websearch.search(query)
+        for_model = {"results": results} if results else {"results": [], "note": "No results; answer from what you know."}
+    except websearch.WebSearchError as e:
+        results, for_model = [], {"error": str(e)}
+    event = _sse("search", {"query": query, "results": [{"title": r["title"], "url": r["url"]} for r in results],
+                            "error": for_model.get("error")})
+    return event, json.dumps(for_model)
+
+
+MAX_SEARCH_ROUNDS = 3
+
+
+async def _answer_without_data(session_id: str, message: str):
+    """No file: answer general questions (searching the web if allowed), or say the data is needed."""
+    yield _sse("start", {"session_id": session_id})
+    tools = _local_web_tools() or None
+    history = _CONVERSATIONS.get(session_id) or [
+        {"role": "system", "content": nodata.general_system_prompt(web_search=bool(tools))}]
+    history = history + [{"role": "user", "content": message}]
+    for round_no in range(MAX_SEARCH_ROUNDS + 1):
+        last_round = round_no == MAX_SEARCH_ROUNDS   # no tools on the last round: it must answer
+        try:
+            reply = await chat_ollama(history, tools=None if last_round else tools)
+        except OllamaError as e:
+            yield _sse("error", {"message": str(e)})
+            return
+        except Exception as e:
+            yield _sse("error", {"message": f"Ollama error: {e}"})
+            return
+        calls = [c for c in _normalize_calls(reply.get("tool_calls") or _text_tool_calls(reply.get("content", "")))
+                 if c["function"]["name"] == "web_search"] if tools and not last_round else []
+        if not calls:
+            break
+        history.append({"role": "assistant", "content": "", "tool_calls": calls})
+        for call in calls:
+            event, content = await _web_search_call(call["function"])
+            yield event
+            history.append({"role": "tool", "content": content})
     text = reply.get("content", "")
     if nodata.needs_file(text):
         yield _sse("needs_file", {"message": nodata.NEEDS_FILE})
         return
     _save_conversation(session_id, history + [reply])   # follow-up questions keep context
-    yield _sse("final", {"content": text, "steps": 0})
+    yield _sse("final", {"content": text, "steps": 0, "sources": reply.get("sources")})
 
 
 def _sse(event: str, data: dict) -> str:
@@ -400,7 +436,7 @@ async def agent(req: AgentRequest):
         expect_code = True
         for step in range(1, MAX_ITERATIONS + 1):
             try:
-                assistant = await chat_ollama(messages, tools=TOOLS)
+                assistant = await chat_ollama(messages, tools=TOOLS + _local_web_tools())
             except OllamaError as e:          # already says what to do about it
                 yield _sse("error", {"message": str(e)})
                 return
@@ -427,7 +463,8 @@ async def agent(req: AgentRequest):
             # No tool call → model is done; its content is the final answer
             if not tool_calls:
                 _save_conversation(session_id, messages)
-                yield _sse("final", {"content": assistant.get("content", ""), "steps": step})
+                yield _sse("final", {"content": assistant.get("content", ""), "steps": step,
+                                     "sources": assistant.get("sources")})
                 recs = _recommendations_event(session_id, req.dataset_id, messages, stuck=False)
                 if recs:
                     yield recs
@@ -435,6 +472,11 @@ async def agent(req: AgentRequest):
 
             for call in tool_calls:
                 fn = call.get("function", {})
+                if fn.get("name") == "web_search" and _local_web_tools():
+                    event, content = await _web_search_call(fn)
+                    yield event
+                    messages.append({"role": "tool", "content": content})
+                    continue
                 if fn.get("name") != "run_python":
                     # tell the model how to fix it — small models retry sensibly
                     # when told what to do, but loop on a bare "unknown tool"

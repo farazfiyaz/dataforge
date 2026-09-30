@@ -15,12 +15,20 @@ import json
 from services.llm import OllamaError
 
 MAX_TOKENS = 16000
-# Keep these reply blocks so they can be echoed back unchanged next turn
-# (thinking blocks must be returned as-is when Claude continues a tool loop)
-_ECHO_BLOCKS = ("text", "thinking", "redacted_thinking", "tool_use")
+MAX_CONTINUATIONS = 3   # resumes of a server-side web search that paused ("pause_turn")
+# Reply blocks echoed back unchanged next turn: everything Claude produced
+# (thinking must be returned as-is in a tool loop), except fallback markers
+_SKIP_BLOCKS = ("fallback",)
 
 
-async def chat(messages: list[dict], tools: list[dict] | None, model: str, api_key: str) -> dict:
+def _web_search_tool(model: str) -> dict:
+    # Haiku 4.5 only has the basic web search; newer models get dynamic filtering
+    version = "web_search_20250305" if model == "claude-haiku-4-5" else "web_search_20260209"
+    return {"type": version, "name": "web_search", "max_uses": 5}
+
+
+async def chat(messages: list[dict], tools: list[dict] | None, model: str, api_key: str,
+               web_search: bool = False) -> dict:
     """One model turn. Returns an Ollama-style assistant message."""
     import anthropic   # imported lazily: local-only users never load the SDK
 
@@ -31,18 +39,32 @@ async def chat(messages: list[dict], tools: list[dict] | None, model: str, api_k
         "system": system,
         "messages": converted,
     }
-    if tools:
-        params["tools"] = [to_claude_tool(t) for t in tools]
+    claude_tools = [to_claude_tool(t) for t in tools or []]
+    if web_search:
+        claude_tools.append(_web_search_tool(model))
+    if claude_tools:
+        params["tools"] = claude_tools
 
     client = anthropic.AsyncAnthropic(api_key=api_key)
-    try:
+
+    async def create(p):
         if model == "claude-opus-5":
             # If Opus 5 declines a request, retry it server-side on the model
             # Anthropic recommends for that case instead of returning a refusal
-            response = await client.beta.messages.create(
-                **params, betas=["server-side-fallback-2026-07-01"], fallbacks="default")
-        else:
-            response = await client.messages.create(**params)
+            return await client.beta.messages.create(
+                **p, betas=["server-side-fallback-2026-07-01"], fallbacks="default")
+        return await client.messages.create(**p)
+
+    try:
+        response = await create(params)
+        blocks = _dump(response)
+        # A long server-side web search can pause; re-send and it resumes
+        for _ in range(MAX_CONTINUATIONS):
+            if response.stop_reason != "pause_turn":
+                break
+            response = await create({**params, "messages": params["messages"] + [
+                {"role": "assistant", "content": blocks}]})
+            blocks += _dump(response)
     except anthropic.AuthenticationError:
         raise OllamaError("The Anthropic API key was rejected. Check it in Model settings.") from None
     except anthropic.PermissionDeniedError:
@@ -61,7 +83,11 @@ async def chat(messages: list[dict], tools: list[dict] | None, model: str, api_k
     finally:
         await client.close()
 
-    return from_claude_response(response)
+    return from_claude_response(response, blocks)
+
+
+def _dump(response) -> list[dict]:
+    return [b.model_dump(exclude_none=True) for b in response.content if b.type not in _SKIP_BLOCKS]
 
 
 def to_claude_tool(tool: dict) -> dict:
@@ -125,12 +151,13 @@ def to_claude_messages(messages: list[dict]) -> tuple[str, list[dict]]:
     return "\n\n".join(p for p in system_parts if p), out
 
 
-def from_claude_response(response) -> dict:
+def from_claude_response(response, blocks: list[dict] | None = None) -> dict:
     """Messages API reply → Ollama-style assistant message (plus the raw blocks to echo back)."""
     if response.stop_reason == "refusal":
         return {"role": "assistant", "content": "The cloud model declined to answer this request. "
                                                 "Try rephrasing it, or switch to the local model."}
-    blocks = [b.model_dump(exclude_none=True) for b in response.content if b.type in _ECHO_BLOCKS]
+    if blocks is None:
+        blocks = _dump(response)
     text = "\n".join(b["text"] for b in blocks if b["type"] == "text").strip()
     calls = [{"id": b["id"], "function": {"name": b["name"], "arguments": b["input"]}}
              for b in blocks if b["type"] == "tool_use"]
@@ -139,4 +166,20 @@ def from_claude_response(response) -> dict:
     message = {"role": "assistant", "content": text, "claude_content": blocks}
     if calls:
         message["tool_calls"] = calls
+    sources = _sources(blocks)
+    if sources:
+        message["sources"] = sources
     return message
+
+
+def _sources(blocks: list[dict]) -> list[dict]:
+    """Pages Claude's web search found, for a "Sources" list under the answer."""
+    seen, out = set(), []
+    for b in blocks:
+        if b.get("type") == "web_search_tool_result" and isinstance(b.get("content"), list):
+            for r in b["content"]:
+                url = r.get("url")
+                if url and url not in seen:
+                    seen.add(url)
+                    out.append({"title": r.get("title") or url, "url": url})
+    return out[:8]

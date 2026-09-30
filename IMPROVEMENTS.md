@@ -149,6 +149,17 @@ server-side refusal fallbacks. Errors (bad key, rate limit, offline) become plai
   Stopping aborts the request; the backend cancels the run and drops the unfinished
   turn from the agent's memory, so the next question starts clean.
 
+### 2026-09-30 — Opt-in web search for general questions
+A "Search the web" switch in Model settings (off by default). Local model: a `web_search`
+tool backed by DuckDuckGo's HTML results (no key; only the search words leave the machine),
+shown in the chat as "Searched the web for …" with links. Cloud: Claude's own web search
+tool (`web_search_20260209`, or `_20250305` on Haiku 4.5), with `pause_turn` resumed and a
+Sources list under the answer. The no-file prompt now says questions about software,
+facts and news aren't "your data", and with search on it includes today's date.
+Live (qwen2.5-coder:7b): "latest pandas version" searched and answered 3.0.6; "what is a
+p-value" answered without searching; "churn rate in my data" asked for a file. The
+7B model still searched "2022 World Cup" for "most recent World Cup" despite the date.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

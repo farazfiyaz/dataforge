@@ -127,6 +127,15 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-09-30 — Clear error for files with headers but no rows
+A CSV or Excel file with only a header row (an export whose filter matched
+nothing, or an empty template) made upload and Auto Analyze answer a bare 500.
+The profile's null percentages were `0/0 = NaN`, which isn't valid JSON, and
+the browser then failed to parse the error body. `read_table` now rejects it
+with a 400: "The file has column headers (3) but no data rows." A workbook with
+a blank sheet says "The file is empty." The agent's workspace `load_file` gets
+the same message.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

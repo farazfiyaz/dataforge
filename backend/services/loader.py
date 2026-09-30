@@ -34,9 +34,15 @@ def read_table(data: bytes, filename: str) -> pd.DataFrame:
         raise ValueError("Only CSV, TSV and Excel (.xlsx, .xls) files are supported.")
     if not data.strip():
         raise ValueError("The file is empty.")
-    if ext in EXCEL_EXTENSIONS:
-        return _read_excel(data, ext)
-    return _read_text(data, ext)
+    df = _read_excel(data, ext) if ext in EXCEL_EXTENSIONS else _read_text(data, ext)
+    # A header row alone (an export with its filter set to nothing, or an
+    # empty template) profiled as NaN percentages, which the API couldn't
+    # send as JSON: upload and Auto Analyze answered a bare 500
+    if df.empty:
+        if len(df.columns):
+            raise ValueError(f"The file has column headers ({len(df.columns)}) but no data rows.")
+        raise ValueError("The file is empty.")
+    return df
 
 
 def _read_excel(data: bytes, ext: str) -> pd.DataFrame:

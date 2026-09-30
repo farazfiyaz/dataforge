@@ -127,6 +127,17 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-09-30 — Explain Ollama crashes and out-of-memory in words
+Only "not running", "too slow" and "model missing" were translated. Other
+failures leaked raw text: a 500 showed `Ollama returned an error (500):
+{"error":"model requires more system memory (5.6 GiB) than is available (3.1 GiB)"}`,
+a model process that crashed or was killed mid-answer (`ReadError`,
+`RemoteProtocolError`) became "Ollama error: …" (a 502 in Explain/Code/Plot
+modes), and a non-JSON reply raised a JSON decode error. Now: out of memory says
+so and says to close other apps, other errors show Ollama's own message without
+JSON, dropped connections say Ollama stopped answering, and a garbled reply is an
+OllamaError (503). Tests in `test_llm_errors.py`.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

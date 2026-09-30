@@ -27,8 +27,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from services.llm import OllamaError, chat_ollama
-from services.datastore import get_dataset
+from services.datastore import get_dataset, has_dataset
 from services.executor import run_code_async, reset_session, peek_session_df
+from services import nodata
 from services.recommend import recommend
 from services.workspace import set_workspace, get_workspace
 
@@ -269,6 +270,32 @@ def _schema(dataset_id: Optional[str]) -> Optional[str]:
     return "\n".join(lines)
 
 
+async def _file_gone(session_id: str):
+    yield _sse("start", {"session_id": session_id})
+    yield _sse("needs_file", {"message": nodata.NEEDS_FILE_STALE})
+
+
+async def _answer_without_data(session_id: str, message: str):
+    """No file: answer general questions (no tools), or say the data is needed."""
+    yield _sse("start", {"session_id": session_id})
+    history = _CONVERSATIONS.get(session_id) or [{"role": "system", "content": nodata.GENERAL_SYSTEM_PROMPT}]
+    history = history + [{"role": "user", "content": message}]
+    try:
+        reply = await chat_ollama(history)
+    except OllamaError as e:
+        yield _sse("error", {"message": str(e)})
+        return
+    except Exception as e:
+        yield _sse("error", {"message": f"Ollama error: {e}"})
+        return
+    text = reply.get("content", "")
+    if nodata.needs_file(text):
+        yield _sse("needs_file", {"message": nodata.NEEDS_FILE})
+        return
+    _save_conversation(session_id, history + [reply])   # follow-up questions keep context
+    yield _sse("final", {"content": text, "steps": 0})
+
+
 def _sse(event: str, data: dict) -> str:
     """Format one Server-Sent Event."""
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
@@ -326,6 +353,16 @@ async def agent(req: AgentRequest):
     """Run the agentic loop, streaming steps as SSE."""
     session_id = req.session_id or uuid.uuid4().hex
 
+    # No data to work on: never let the model write code against a `df` that
+    # doesn't exist (it loops on NameErrors). A general question still gets an
+    # answer; one that needs the user's data gets "attach a file".
+    has_data = (has_dataset(req.dataset_id) or req.csv_data.strip()
+                or peek_session_df(session_id) is not None or get_workspace())
+    if not has_data:
+        events = (_file_gone(session_id) if req.dataset_id
+                  else _answer_without_data(session_id, req.message))
+        return StreamingResponse(events, media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+
     # Continue the existing conversation if there is one — this is what lets
     # the user say "fix it" / "now color by category" and have it just work
     messages = _CONVERSATIONS.get(session_id)
@@ -336,9 +373,25 @@ async def agent(req: AgentRequest):
             {"role": "system", "content": SYSTEM_PROMPT.format(
                 schema=_schema(req.dataset_id) or req.context or "unknown")},
         ]
+    turn_start = len(messages)
     messages.append({"role": "user", "content": req.message})
 
     async def stream():
+        """
+        Stopped by the user (the browser aborts the request, Starlette cancels
+        this generator): drop the half-finished turn from the conversation, so
+        the next message doesn't build on a tool call with no result.
+        """
+        finished = False
+        try:
+            async for chunk in run():
+                yield chunk
+            finished = True
+        finally:
+            if not finished:
+                del messages[turn_start:]
+
+    async def run():
         yield _sse("start", {"session_id": session_id})
 
         # ```python blocks in a reply are code to run (not examples) until

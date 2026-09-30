@@ -27,3 +27,12 @@ def temp_settings(tmp_path, monkeypatch):
     from services import settings
     monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def no_workspace():
+    """The workspace folder is process-global; don't let one test's leak into another."""
+    from services import workspace
+    workspace._workspace_root = None
+    yield
+    workspace._workspace_root = None

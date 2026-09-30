@@ -138,6 +138,16 @@ A **Model** button chooses who answers:
 `services/claude.py` translates the agent's Ollama-style conversation to the Messages API
 and back, echoing Claude's raw blocks (thinking included) unchanged. Opus 5 uses
 server-side refusal fallbacks. Errors (bad key, rate limit, offline) become plain messages.
+### 2026-09-28 — "No file attached" message and a Stop button
+- With no file attached, general questions ("what is a p-value?", "write code for
+  a moving average") are answered normally, in any mode, with no code execution.
+  Questions that need the user's data get "There's no file attached, and this
+  question needs your data" plus an Attach button; the model signals this with a
+  marker. There's a separate message when a restored chat's file is gone after a restart.
+  Live, qwen2.5-coder:7b classified 7 of 8 test questions as expected.
+- While a reply is in progress, the send button becomes Stop (Esc also works).
+  Stopping aborts the request; the backend cancels the run and drops the unfinished
+  turn from the agent's memory, so the next question starts clean.
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`

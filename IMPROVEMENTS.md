@@ -127,6 +127,16 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-10-01 — Describe grouped bars and pie charts to the model
+"Churn by plan" is usually drawn as `groupby(['plan','churn']).size().unstack().plot.bar()`
+or `sns.countplot(x='plan', hue='churn')`. Those bars sit beside their tick, so the
+model was told `bars 'no': -0.125=308, 0.875=133, 1.875=304`, and seaborn's series
+weren't named at all. Pie charts produced no description. Now a series offset by
+a constant from the ticks takes the tick labels (histograms are unaffected),
+unnamed seaborn series take their legend names, and pies list each slice's share:
+`bars 'no': basic=308, enterprise=133, pro=304; bars 'yes': basic=420, …` and
+`pie, 3 slices: basic 48.5%, pro 36.3%, enterprise 15.1%`.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

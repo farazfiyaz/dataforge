@@ -208,7 +208,7 @@ def run_code(
 
         # A DataFrame the code ended on is what the user asked to see
         if isinstance(last_value, pd.DataFrame):
-            result["table"] = last_value.head(100).fillna("").to_dict(orient="records")
+            result["table"] = _table_records(last_value)
 
         # Otherwise prefer a DataFrame assigned in THIS run; fall back to any DataFrame
         new_keys = [k for k in local_ns.keys() if k not in keys_before]
@@ -216,7 +216,7 @@ def run_code(
         for key in scan if result["table"] is None else []:
             val = local_ns[key]
             if isinstance(val, pd.DataFrame):
-                result["table"] = val.head(100).fillna("").to_dict(orient="records")
+                result["table"] = _table_records(val)
                 break
 
         # Encode EVERY figure the code drew, not just the last one — code that
@@ -255,6 +255,32 @@ def run_code(
 
 
 MAX_ECHO_CHARS = 4000
+MAX_TABLE_ROWS = 100
+
+
+_JSON_SCALARS = (str, int, float, bool)
+
+
+def _table_records(df: pd.DataFrame) -> list[dict] | None:
+    """
+    First rows of a result DataFrame as JSON-ready records: blanks for
+    missing values, text for dates, intervals and other objects.
+    - `fillna("")` raises on a categorical column with gaps (what `pd.cut`
+      gives for out-of-range values). `df` itself is the fallback table, so
+      one such column made every later run report a pandas traceback, even
+      `print(df['x'].mean())` that had printed the right answer.
+    - Timestamps (any parsed date column) aren't JSON: the agent's event
+      stream died mid-answer with "Object of type Timestamp is not JSON serializable".
+    The table is only a display extra, so it never fails the run.
+    """
+    try:
+        head = df.head(MAX_TABLE_ROWS)
+        cells = head.astype(object).where(head.notna(), "")
+        return [{str(k): v if v is None or isinstance(v, _JSON_SCALARS) else str(v)
+                 for k, v in row.items()}
+                for row in cells.to_dict(orient="records")]
+    except Exception:
+        return None
 
 
 def _split_last_expression(code: str):

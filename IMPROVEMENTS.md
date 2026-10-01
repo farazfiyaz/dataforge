@@ -127,6 +127,14 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-10-01 — train_model on binned (categorical) targets
+"Predict the tenure group" leads the agent to `pd.cut` a column and train on it.
+`train_model` crashed with sklearn's "Unknown label type: unknown" because the
+labels were `Interval` objects. Named bins (`labels=["new", "mid", "loyal"]`)
+trained, but the confusion matrix sorted them alphabetically, and a categorical
+with more than 10 numeric categories was treated as regression. Categorical
+targets are now always classification, encoded in the categories' own order.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

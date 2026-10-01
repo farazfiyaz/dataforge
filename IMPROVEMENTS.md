@@ -127,6 +127,17 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-10-02 — Chart styles no longer leak between sandbox runs
+Matplotlib's style is global to the process, and the sandbox never reset it. The
+agent prompt asks for `plt.style.use('dark_background')`, so after the first
+agent chart every later chart was dark. That included plain `/api/execute` runs
+and other datasets' sessions. Any `rcParams['figure.figsize'] = (30, 20)` or
+`sns.set_theme(...)` from generated code also stuck until restart. Each run now
+executes inside `matplotlib.rc_context()`. A style still applies to the charts
+of the run that sets it, and is restored afterwards, including after errors and
+timeouts. Trade-off: a style set in one agent step no longer carries over to the
+next step of the same session.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

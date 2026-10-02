@@ -127,6 +127,15 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-10-02 — Auto Analyze: no ID charts, and charts for True/False columns
+Auto Analyze's "Top Values" charts used the first six text columns as they came.
+A text identifier (`order_id` = "A-1001", an email column) became a chart of ten
+bars that are all 1 high, and it used up one of the six slots. Numeric IDs were
+already skipped. True/False columns, often the outcome itself (`churned`), got no
+chart at all, since they count as neither text nor numeric. Now ID columns and
+all-unique columns are skipped, bool columns are charted, charts follow the
+file's column order, and the six-chart cap counts only charts that are drawn.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

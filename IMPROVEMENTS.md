@@ -127,6 +127,15 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-10-02 — Keep output printed before an error
+When sandbox code failed partway, everything it had printed was thrown away:
+`print(df.shape)` followed by a bad `df['nope']` came back as only a KeyError,
+so neither the user nor the model saw the shape. The model then reran (and
+re-guessed) steps it had already done. The sandbox now keeps stdout on errors,
+the agent passes it to the model as `stdout_before_error`, and the failed step
+shows it under "Output before the error". Leftover figures from the failed run
+are closed too.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

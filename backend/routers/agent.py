@@ -15,6 +15,7 @@ Each step is streamed to the frontend as a Server-Sent Event so the user can
 watch the agent work in real time.
 """
 
+import ast
 import json
 import re
 import uuid
@@ -216,8 +217,28 @@ def _normalize_calls(calls: list[dict]) -> list[dict]:
                 args = {"code": args}
         if name != "run_python" and (code := _helper_call_as_code(name, args)):
             name, args = "run_python", {"code": code}
+        if name == "run_python" and isinstance(args, dict) and isinstance(args.get("code"), str):
+            args = {**args, "code": _unfence(args["code"])}
         out.append({"function": {"name": name, "arguments": args}})
     return out
+
+
+def _unfence(code: str) -> str:
+    """
+    The code from a markdown-wrapped `code` argument (```python ... ```, maybe
+    with a line of prose around it). Models write the argument the way they'd
+    write a chat reply; run as-is it's a SyntaxError on line 1, and the retry
+    usually wraps it again. Code that already parses is never touched.
+    """
+    try:
+        ast.parse(code)
+        return code
+    except SyntaxError:
+        pass
+    bodies = [body.strip() for _, body in _FENCE.findall(code)]
+    if not bodies and code.lstrip().startswith("```"):   # opening fence, closing one cut off
+        bodies = [code.lstrip()[3:].split("\n", 1)[-1].strip()]
+    return "\n\n".join(bodies) if any(bodies) else code
 
 
 # Sandbox helpers that models "call" as if they were tools. Rather than bounce

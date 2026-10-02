@@ -127,6 +127,13 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-10-03 — Run fenced code inside a run_python call
+Models often write the `code` argument the way they'd write a chat reply,
+wrapped in a markdown fence, sometimes with a line of prose around it. The sandbox ran that text
+as-is and hit `SyntaxError` on line 1 (the opening fence). The agent now unwraps a fenced
+argument, whether native or text tool call, before running and showing it. Code that
+already parses is left alone, so a fence inside a string still works.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

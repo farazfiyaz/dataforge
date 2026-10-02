@@ -127,6 +127,13 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-10-02 — Describe seaborn barplot error bars as error bars
+`sns.barplot` (the usual "mean X per group" chart) draws its 95% CI as one
+2-point line per bar. The chart summary read four or more of those as a box
+plot ("box plot: boxes and whiskers span 43.85 to 54.41"), and three as
+unnamed "line: 2 points" entries. They're now matched to their bars and
+reported as "error bars: team 47.33–51.8, enterprise 45.44–51.17, …".
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

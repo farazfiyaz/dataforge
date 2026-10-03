@@ -229,6 +229,16 @@ whitespace-only cells count as missing, and numeric text is converted before
 nulls and duplicates are handled. A header is not trimmed if that would give it
 the same name as another column. New `tests/test_cleaner_padded_csv.py`: 5 of
 its 6 tests failed before the fix.
+### 2026-09-29 — Don't crash on infinite values
+A CSV with `inf` in it (a spreadsheet's `#DIV/0!` saved as text, or a ratio
+column) made `/api/upload` and `/api/autoanalyze` answer 500: `inf` isn't valid
+JSON, so the profile's sample rows couldn't be sent, and matplotlib refused to
+draw histograms over a range reaching `inf`. The same went for code results:
+`df.a / df.b` with a zero in `b` put `inf` in the result table, which broke
+`/api/execute` and wrote `Infinity` into the agent's stream, which the browser
+can't parse. Tables and samples now show `"inf"` / `"-inf"` as text
+(`eda.table_records`), and Auto Analyze's histograms, box plots and heatmap
+leave infinite values out. The data itself is unchanged.
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
@@ -247,3 +257,5 @@ its 6 tests failed before the fix.
 - Violin/strip/swarm plots aren't described beyond their raw collections.
 - Uploads (`/api/upload`, agent `df`) still keep ", "-padded headers and cells
   (` plan`, `" 34"` as text); the loader could read with `skipinitialspace=True`.
+- A numeric column with any `inf` gets `mean`/`max` of null in the profile; stats over the
+  finite values plus an `inf_count` would be clearer (and Auto clean could treat inf as missing).

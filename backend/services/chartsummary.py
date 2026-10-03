@@ -14,6 +14,7 @@ from matplotlib.collections import PathCollection, QuadMesh
 from matplotlib.container import BarContainer
 
 MAX_BARS_LISTED = 20
+MAX_BOXES_LISTED = 12
 MAX_CHARS = 1500
 
 
@@ -61,13 +62,17 @@ def _lines(ax) -> list[str]:
     """
     Plain lines are described one by one. Box plots are drawn as many short
     segments plus marker-only "flier" points; listing those segment by segment
-    is noise, so they're summarised as whisker span + outlier values.
+    is noise, so they're summarised per box (median, middle 50%, whiskers,
+    outliers), falling back to one whisker span + outlier values.
     """
     data = [(line, _nums(line.get_xdata()), _nums(line.get_ydata())) for line in ax.get_lines()]
     points = [d for d in data if _markers_only(d[0]) and d[1]]
     segments = [d for d in data if not _markers_only(d[0]) and 2 <= len(d[1]) <= 5]
     out = []
-    if len(segments) >= 4:   # box-plot structure: box outline, whiskers, caps, median
+    boxes = _boxes(ax, segments, points) if len(segments) >= 4 else None
+    if boxes:
+        out.append(boxes)
+    elif len(segments) >= 4:   # box-plot structure: box outline, whiskers, caps, median
         xs = [v for _, x, _ in segments for v in x]
         ys = [v for _, _, y in segments for v in y]
         vertical = (max(ys) - min(ys)) >= (max(xs) - min(xs))
@@ -88,6 +93,82 @@ def _lines(ax) -> list[str]:
         out.append(f"line{name}: {len(ys)} points, y from {_f(ys[0])} to {_f(ys[-1])} "
                    f"(min {_f(min(ys))}, max {_f(max(ys))})")
     return out
+
+
+def _boxes(ax, segments, points) -> str:
+    """
+    Per-box summary: median, middle 50% and whiskers of each box, by category.
+    matplotlib, pandas and seaborn all draw a box as two whiskers along the
+    value axis at the box's position (box edge → whisker end), plus caps and a
+    median across it; the median is the widest of those. Returns "" if the
+    lines don't have that structure.
+    """
+    best = None
+    for vertical in (True, False):
+        pos_of = (lambda xs, ys: xs) if vertical else (lambda xs, ys: ys)
+        val_of = (lambda xs, ys: ys) if vertical else (lambda xs, ys: xs)
+        whiskers, across = {}, []
+        for _, xs, ys in segments:
+            if len(xs) != 2 or len(ys) != 2:
+                continue
+            p, v = pos_of(xs, ys), val_of(xs, ys)
+            if p[0] == p[1]:
+                whiskers.setdefault(round(p[0], 6), []).append(v)
+            elif v[0] == v[1]:
+                across.append(((p[0] + p[1]) / 2, abs(p[1] - p[0]), v[0]))
+        pairs = {pos: w for pos, w in whiskers.items() if len(w) == 2}
+        if pairs and (best is None or len(pairs) > len(best[1])):
+            best = (vertical, pairs, across)
+    if best is None:
+        return ""
+    vertical, pairs, across = best
+    labels = {round(t.get_position()[0 if vertical else 1], 6): t.get_text()
+              for t in (ax.get_xticklabels() if vertical else ax.get_yticklabels()) if t.get_text()}
+    names = _box_names(ax, sorted(pairs), labels)
+    rows = []
+    for pos, name in zip(sorted(pairs), names):
+        low, high = sorted(pairs[pos], key=min)
+        lo, q1, q3, hi = min(low), max(low), min(high), max(high)
+        centred = [(width, v) for c, width, v in across if abs(c - pos) < 1e-6 and q1 <= v <= q3]
+        if not centred:
+            return ""
+        median = max(centred)[1]
+        fliers = sorted({(y if vertical else x)[i] for _, x, y in points
+                         for i in range(min(len(x), len(y))) if abs((x if vertical else y)[i] - pos) < 1e-6})
+        rows.append((name, median, q1, q3, lo, hi, fliers))
+    if len(rows) == 1:
+        _, median, q1, q3, lo, hi, fliers = rows[0]
+        desc = f"box plot: boxes and whiskers span {_f(lo)} to {_f(hi)}; median {_f(median)}, middle 50% {_f(q1)}–{_f(q3)}"
+        if fliers:
+            desc += f"; outlier points at {_list(fliers, 15)}"
+        return desc
+    parts = []
+    for label, median, q1, q3, lo, hi, fliers in rows[:MAX_BOXES_LISTED]:
+        part = f"{label}: median {_f(median)}, middle 50% {_f(q1)}–{_f(q3)}, whiskers {_f(lo)}–{_f(hi)}"
+        if fliers:
+            part += f", outliers {_list(fliers, 5)}"
+        parts.append(part)
+    more = f"; +{len(rows) - MAX_BOXES_LISTED} more boxes" if len(rows) > MAX_BOXES_LISTED else ""
+    return f"box plot, {len(rows)} boxes: " + "; ".join(parts) + more
+
+
+def _box_names(ax, positions, labels) -> list[str]:
+    """
+    Tick label under each box. With seaborn `hue`, boxes are dodged off the
+    ticks, `hue` values per tick in legend order, so they're named "tick / hue".
+    """
+    if all(p in labels for p in positions):
+        return [labels[p] for p in positions]
+    legend = ax.get_legend()
+    hues = [t.get_text() for t in legend.get_texts()] if legend else []
+    ticks = [labels[p] for p in sorted(labels)]
+    if hues and ticks and len(positions) == len(hues) * len(ticks):
+        return [f"{ticks[i // len(hues)]} / {hues[i % len(hues)]}" for i in range(len(positions))]
+    return [labels.get(p) or _f(p) for p in positions]
+
+
+def _list(values, limit) -> str:
+    return ", ".join(_f(v) for v in values[:limit]) + (" …" if len(values) > limit else "")
 
 
 def _strongest_cells(ax, arr) -> str:

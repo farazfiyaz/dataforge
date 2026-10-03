@@ -168,6 +168,14 @@ p-value" answered without searching; "churn rate in my data" asked for a file. T
   note. Only tables made in that step are saved (not the unchanged dataset every step).
   The files are the user's to delete: the folder is recreated on the next save, and a
   failed save is skipped, never an error. Folder: `DATAFORGE_OUTPUT_DIR`.
+### 2026-09-28 — Describe each box in a grouped box plot
+"Compare monthly_bill across plans" as a box plot was described to the model as
+one combined span ("boxes and whiskers span 3.04 to 124.5"), so it couldn't say
+which plan was higher. Box plots (seaborn, pandas `df.boxplot(by=...)`,
+`plt.boxplot`, vertical or horizontal) are now summarised per box: median,
+middle 50%, whiskers and that box's outliers, named by category. Seaborn `hue`
+boxes are named "category / hue" from the legend. Single boxes also get their
+median. On the demo data every median and quartile matches pandas exactly.
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
@@ -178,3 +186,4 @@ p-value" answered without searching; "churn rate in my data" asked for a file. T
 - Recommendations could offer "one-click run" instead of just filling the input.
 - Box plots with several boxes are summarised as one combined span; per-box medians/quartiles would be better.
 - Live: for "churn rate per plan as a bar chart" the model ran `sns.barplot(y='churn', estimator=...)` on the yes/no text column, giving an empty chart (the table was right). Tell it to compute the rate first and plot that.
+- Violin/strip/swarm plots aren't described beyond their raw collections.

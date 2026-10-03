@@ -194,66 +194,69 @@ def run_code(
     keys_before = set(local_ns.keys())
 
     try:
-        plt.close("all")   # drop any figures left over from a previous run — keeps memory flat across a long session
-        body, last_expr = _split_last_expression(code)
-        namespace = {**SAFE_GLOBALS, **local_ns}
-        sys.settrace(_deadline_tracer(time.monotonic() + EXEC_TIMEOUT_S, EXEC_TIMEOUT_S))
-        try:
-            exec(body, namespace, local_ns)  # noqa: S102
-            last_value = eval(last_expr, namespace, local_ns) if last_expr else None  # noqa: S307
-        finally:
-            sys.settrace(old_trace)
-        if (shown := _echo(last_value)) is not None:
-            print(shown)
-
-        result["stdout"] = stdout_capture.getvalue()
-
-        # A DataFrame the code ended on is what the user asked to see
-        made_table = None      # a table this run produced (worth saving to disk)
-        if isinstance(last_value, pd.DataFrame):
-            result["table"] = table_records(last_value, 100)
-            made_table = last_value
-
-        # Otherwise prefer a DataFrame assigned in THIS run; fall back to any DataFrame
-        new_keys = [k for k in local_ns.keys() if k not in keys_before]
-        scan = list(reversed(new_keys)) or list(reversed(list(local_ns.keys())))
-        for key in scan if result["table"] is None else []:
-            val = local_ns[key]
-            if isinstance(val, pd.DataFrame):
-                result["table"] = table_records(val, 100)
-                if key in new_keys:
-                    made_table = val
-                break
-
-        # Encode EVERY figure the code drew, not just the last one — code that
-        # plots more than once per run (e.g. train_model's diagnostics figure
-        # followed by an extra chart) used to lose all but the final figure.
-        charts, summaries, titles = [], [], []
-        for num in plt.get_fignums():
-            fig = plt.figure(num)
-            if not fig.get_axes():
-                continue
-            buf = io.BytesIO()
-            fig.savefig(buf, format="png", bbox_inches="tight")
-            buf.seek(0)
-            charts.append(base64.b64encode(buf.read()).decode())
-            titles.append(next((ax.get_title() for ax in fig.get_axes() if ax.get_title()), "") or "chart")
+        # Style changes (plt.style.use, sns.set_theme, rcParams[...] = ...) last
+        # for this run only; they used to stick to every later chart in the app.
+        with matplotlib.rc_context():
+            plt.close("all")   # drop any figures left over from a previous run — keeps memory flat across a long session
+            body, last_expr = _split_last_expression(code)
+            namespace = {**SAFE_GLOBALS, **local_ns}
+            sys.settrace(_deadline_tracer(time.monotonic() + EXEC_TIMEOUT_S, EXEC_TIMEOUT_S))
             try:
-                summaries.append(describe_figure(fig))   # after savefig: tick labels exist now
-            except Exception:
-                summaries.append("")
-        plt.close("all")
+                exec(body, namespace, local_ns)  # noqa: S102
+                last_value = eval(last_expr, namespace, local_ns) if last_expr else None  # noqa: S307
+            finally:
+                sys.settrace(old_trace)
+            if (shown := _echo(last_value)) is not None:
+                print(shown)
 
-        if charts:
-            result["charts"] = charts
-            result["chart_summaries"] = summaries
-            result["chart"] = charts[0]   # back-compat: first chart for older consumers
+            result["stdout"] = stdout_capture.getvalue()
 
-        # Keep a copy of what was made in Documents/DataForge (never fails the run)
-        saved = [outputs.save_png(c, t) for c, t in zip(charts, titles)]
-        if made_table is not None:
-            saved.append(outputs.save_csv(made_table.head(MAX_SAVED_ROWS), "table"))
-        result["saved"] = [s for s in saved if s]
+            # A DataFrame the code ended on is what the user asked to see
+            made_table = None      # a table this run produced (worth saving to disk)
+            if isinstance(last_value, pd.DataFrame):
+                result["table"] = table_records(last_value, 100)
+                made_table = last_value
+
+            # Otherwise prefer a DataFrame assigned in THIS run; fall back to any DataFrame
+            new_keys = [k for k in local_ns.keys() if k not in keys_before]
+            scan = list(reversed(new_keys)) or list(reversed(list(local_ns.keys())))
+            for key in scan if result["table"] is None else []:
+                val = local_ns[key]
+                if isinstance(val, pd.DataFrame):
+                    result["table"] = table_records(val, 100)
+                    if key in new_keys:
+                        made_table = val
+                    break
+
+            # Encode EVERY figure the code drew, not just the last one — code that
+            # plots more than once per run (e.g. train_model's diagnostics figure
+            # followed by an extra chart) used to lose all but the final figure.
+            charts, summaries, titles = [], [], []
+            for num in plt.get_fignums():
+                fig = plt.figure(num)
+                if not fig.get_axes():
+                    continue
+                buf = io.BytesIO()
+                fig.savefig(buf, format="png", bbox_inches="tight")
+                buf.seek(0)
+                charts.append(base64.b64encode(buf.read()).decode())
+                titles.append(next((ax.get_title() for ax in fig.get_axes() if ax.get_title()), "") or "chart")
+                try:
+                    summaries.append(describe_figure(fig))   # after savefig: tick labels exist now
+                except Exception:
+                    summaries.append("")
+            plt.close("all")
+
+            if charts:
+                result["charts"] = charts
+                result["chart_summaries"] = summaries
+                result["chart"] = charts[0]   # back-compat: first chart for older consumers
+
+            # Keep a copy of what was made in Documents/DataForge (never fails the run)
+            saved = [outputs.save_png(c, t) for c, t in zip(charts, titles)]
+            if made_table is not None:
+                saved.append(outputs.save_csv(made_table.head(MAX_SAVED_ROWS), "table"))
+            result["saved"] = [s for s in saved if s]
 
     except ExecutionTimeout as e:
         result["stdout"] = stdout_capture.getvalue()

@@ -280,6 +280,17 @@ or a duplicate column name (`pd.concat([df, df[["plan"]]], axis=1)`), every rule
 raised (`unhashable type: 'list'`, "truth value of a Series is ambiguous"), the
 error was swallowed, and the suggestions silently vanished. `recommend()` now
 keeps the first column of each name and skips columns whose values can't be counted.
+### 2026-10-01 — Result tables with bins, dates or grouped columns no longer break runs
+The sandbox turned result DataFrames into table rows with `fillna("")`, which caused two bugs:
+- **A binned column poisoned the session.** `pd.cut` leaves gaps for out-of-range
+  values, and `fillna("")` raises on a categorical with gaps. `df` is the fallback
+  table, so after `df['bucket'] = pd.cut(...)` *every* later run reported a pandas
+  traceback, even `print(df['x'].mean())` that had printed the right answer.
+- **Dates killed the agent's stream.** Timestamps stayed as objects, and the
+  agent's event stream died with "Object of type Timestamp is not JSON serializable".
+Tables are now built from plain values (dates, intervals and tuple column names
+as text, blanks for gaps), and a table that still can't be built is left out
+without failing the run. Tests: `tests/test_result_tables.py` (3 of 4 fail on the old code).
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`

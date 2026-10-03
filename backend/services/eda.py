@@ -93,20 +93,32 @@ def find_date_column(df: pd.DataFrame) -> str | None:
 
 
 
-def table_records(df: pd.DataFrame, n: int) -> list[dict]:
+def table_records(df: pd.DataFrame, n: int) -> list[dict] | None:
     """
-    First n rows as JSON-ready records. Infinities (a spreadsheet's #DIV/0!
-    saved as "inf", or a ratio column divided by zero) are not valid JSON:
-    the API answered 500 and the browser couldn't parse the agent's stream.
-    They're shown as the text "inf" / "-inf" instead.
+    First n rows as JSON-ready records. The table is a display extra, so this
+    never fails the run (None means "no table").
+    - Infinities (a spreadsheet's #DIV/0! saved as "inf", a ratio divided by
+      zero) aren't valid JSON: shown as the text "inf" / "-inf".
+    - `fillna("")` raises on a categorical column with gaps (what `pd.cut`
+      gives for out-of-range values): missing cells become "" via `where`.
+    - Timestamps, intervals and other objects aren't JSON: shown as text.
     """
-    head = df.head(n).copy()
-    for i in range(head.shape[1]):
-        s = head.iloc[:, i]
-        if pd.api.types.is_float_dtype(s) and np.isinf(s).any():
-            head.isetitem(i, [("inf" if v > 0 else "-inf") if isinstance(v, float) and np.isinf(v) else v
-                              for v in s.astype(object)])
-    return head.fillna("").to_dict(orient="records")
+    try:
+        cells = df.head(n).astype(object)
+        cells = cells.where(cells.notna(), "")
+        return [{str(k): _json_cell(v) for k, v in row.items()} for row in cells.to_dict(orient="records")]
+    except Exception:
+        return None
+
+
+def _json_cell(v):
+    if isinstance(v, float) and np.isinf(v):
+        return "inf" if v > 0 else "-inf"
+    if v is None or isinstance(v, (str, int, float, bool)):
+        return v
+    if isinstance(v, (np.integer, np.floating, np.bool_)):
+        return _json_cell(v.item())
+    return str(v)
 
 
 def finite(s: pd.Series) -> pd.Series:

@@ -207,6 +207,17 @@ then the DataFrame). A multi-gigabyte CSV could exhaust a laptop's RAM and
 freeze the app with no message. Uploads are now read in 1 MB chunks and stopped
 at 200 MB (`DATAFORGE_MAX_UPLOAD_MB` to change it) with a 413 that names the
 file, the limit, and what to do. The existing frontend shows that message as-is.
+### 2026-09-29 — train_model no longer crashes on 1/2 labels or rare classes
+`train_model` decided "binary" from the test split and called `roc_curve`
+without a positive label. Two common cases crashed after printing metrics:
+- a two-class target coded `1`/`2` → `ValueError: y_true takes value in {1, 2}`;
+- a three-class target whose rare class landed only in training: the test
+  split looked binary, so it printed a meaningless `ROC AUC: 0.379` from the
+  wrong probability column (accuracy was 1.000), then crashed the same way.
+Binary is now judged from the model's own classes, `roc_curve` gets
+`pos_label`, and the confusion matrix is built over every class seen, so the
+matrix and its tick labels always match. New `tests/test_model_report.py`
+(both tests fail without the fix).
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`

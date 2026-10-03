@@ -55,9 +55,11 @@ def test_agent_runs_fenced_code_argument(client, monkeypatch):
         return next(replies)
     monkeypatch.setattr(agent_router, "chat_ollama", fake_llm)
 
-    res = client.post("/api/agent/", json={"message": "what is 6*7?"}, headers={"Origin": APP_ORIGIN})
+    # some data, so this goes through the code-running agent rather than the no-file answer path
+    res = client.post("/api/agent/", json={"message": "what is 6*7?", "csv_data": "a,b\n1,2\n"},
+                      headers={"Origin": APP_ORIGIN})
     events = [(b.split("\n")[0][7:], json.loads(b.split("\n", 1)[1][6:])) for b in res.text.strip().split("\n\n")]
-    assert [e for e, _ in events] == ["start", "code", "result", "final"]
+    assert [e for e, _ in events if e != "recommendations"] == ["start", "code", "result", "final"]
     assert events[1][1]["code"] == CODE              # the user sees clean code too
     assert events[2][1]["error"] is None
     assert events[2][1]["stdout"].strip() == "42"

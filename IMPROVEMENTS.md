@@ -183,6 +183,13 @@ then drops every dot, so German-Excel-style dates silently became numbers
 became `110`. The agent would happily average them. The loader now keeps a
 parsed column only if every value is a well-formed European number (dots only
 between groups of three digits); other columns keep their original text.
+### 2026-09-28 — A bare `except:` can no longer swallow the time limit
+The sandbox's `ExecutionTimeout` is a BaseException, so `except Exception:`
+can't catch it, but a bare `except:` can. `try: while True: pass / except: print('caught')`
+ran for 0.5s, printed "caught" and reported success. `while True: try: ... except: pass`
+hung past the limit (killed after 20s with a 0.5s limit): once the trace hook
+raises, CPython removes it. The sandbox now compiles bare `except:` as
+`except Exception:`, which still catches every ordinary error.
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`

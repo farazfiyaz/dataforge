@@ -62,3 +62,55 @@ def test_dns_rebinding_host_is_rejected():
 
 def test_server_binds_loopback_only():
     assert app_module.HOST == "127.0.0.1"
+
+
+# ── Other programs on the same computer ──
+
+def test_api_needs_the_launch_token(anonymous_client):
+    res = anonymous_client.post("/api/execute/", json={"code": "print('pwned')"},
+                                headers={"Origin": APP_ORIGIN})
+    assert res.status_code == 401
+    assert "pwned" not in res.text
+    assert anonymous_client.get("/api/settings/").status_code == 401
+
+
+def test_wrong_token_is_rejected(anonymous_client):
+    res = anonymous_client.post("/api/execute/", json={"code": "print(1)"},
+                                headers={"X-DataForge-Token": "guess"})
+    assert res.status_code == 401
+
+
+def test_token_header_also_works(anonymous_client):
+    res = anonymous_client.post("/api/execute/", json={"code": "print(1)"},
+                                headers={"X-DataForge-Token": app_module.TOKEN})
+    assert res.status_code == 200
+
+
+def test_page_needs_the_token_and_the_link_swaps_it_for_a_cookie(anonymous_client):
+    assert anonymous_client.get("/").status_code == 401
+    assert anonymous_client.get("/?t=wrong").status_code == 401
+    res = anonymous_client.get(f"/?t={app_module.TOKEN}", follow_redirects=False)
+    assert res.status_code == 303 and res.headers["location"] == "/"
+    cookie = res.headers["set-cookie"]
+    assert "httponly" in cookie.lower() and "samesite=strict" in cookie.lower()
+    assert anonymous_client.get("/").status_code == 200        # cookie now set
+
+
+def test_health_proves_the_server_knows_the_token(client):
+    import hashlib, hmac
+    proof = client.get("/health?nonce=abc").json()["proof"]
+    assert proof == hmac.new(app_module.TOKEN.encode(), b"abc", hashlib.sha256).hexdigest()
+
+
+def test_api_docs_are_off():
+    assert not app_module.DEV
+    c = TestClient(app_module.app, base_url=APP_ORIGIN)
+    assert c.get("/docs").status_code == 404
+    assert c.get("/openapi.json").status_code == 404
+
+
+def test_page_has_a_strict_content_security_policy(client):
+    csp = client.get("/").headers["content-security-policy"]
+    assert "script-src 'self' 'sha256-" in csp
+    assert "unsafe-inline" not in csp.split("script-src")[1].split(";")[0]
+    assert "connect-src 'self'" in csp and "object-src 'none'" in csp

@@ -11,13 +11,20 @@ from fastapi.testclient import TestClient
 # via `python app.py` — mirror that here.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app import app  # noqa: E402
+from app import app, SESSION_COOKIE, TOKEN  # noqa: E402
 
 APP_ORIGIN = "http://localhost:8000"
 
 
 @pytest.fixture
 def client():
+    """Signed in, like the DataForge window (Electron sets this cookie on it)."""
+    return TestClient(app, base_url=APP_ORIGIN, cookies={SESSION_COOKIE: TOKEN})
+
+
+@pytest.fixture
+def anonymous_client():
+    """Any other program on the computer: right host and origin, no token."""
     return TestClient(app, base_url=APP_ORIGIN)
 
 

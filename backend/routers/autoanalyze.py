@@ -16,6 +16,7 @@ from services.cleaner import auto_clean
 from services.autoplot import generate_all_plots
 from services.loader import read_table
 from services import outputs
+from services.upload_limit import read_upload
 
 router = APIRouter()
 
@@ -24,7 +25,7 @@ async def autoanalyze(file: UploadFile = File(...)):
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided.")
 
-    contents = await file.read()
+    contents = await read_upload(file)
     try:
         df_original = read_table(contents, file.filename)
     except ValueError as e:

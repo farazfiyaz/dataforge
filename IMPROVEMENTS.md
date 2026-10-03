@@ -200,6 +200,13 @@ Two common file shapes returned a 500 error:
   column names, and Auto Analyze crashed joining them into the cleaning report
   and again when labelling the missing-values plot. Excel headers are now text,
   the same as a CSV with the same header.
+### 2026-09-29 — Upload size limit
+`/api/upload` and `/api/autoanalyze` read the whole file into memory with
+`await file.read()`, and parsing needs several times that again (decoded text,
+then the DataFrame). A multi-gigabyte CSV could exhaust a laptop's RAM and
+freeze the app with no message. Uploads are now read in 1 MB chunks and stopped
+at 200 MB (`DATAFORGE_MAX_UPLOAD_MB` to change it) with a 413 that names the
+file, the limit, and what to do. The existing frontend shows that message as-is.
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
@@ -211,6 +218,7 @@ Two common file shapes returned a 500 error:
   `find_date_column` currently parses them month-first.
 - Ragged CSV rows (one line with an extra field) fail the whole upload with a C tokenizer error.
 - `/api/upload` reads the whole file into memory with no size limit.
+- A bare `except:` in generated code can still catch the timeout.
 - Recommendations could offer "one-click run" instead of just filling the input.
 - Box plots with several boxes are summarised as one combined span; per-box medians/quartiles would be better.
 - Live: for "churn rate per plan as a bar chart" the model ran `sns.barplot(y='churn', estimator=...)` on the yes/no text column, giving an empty chart (the table was right). Tell it to compute the rate first and plot that.

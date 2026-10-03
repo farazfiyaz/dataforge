@@ -25,7 +25,7 @@ pd.set_option("display.max_columns", 40)
 import matplotlib.pyplot as plt
 from typing import Any
 
-from services import outputs
+from services import codeguard, outputs
 from services.chartsummary import describe_figure
 from services.datastore import get_dataset
 from services.eda import table_records
@@ -40,7 +40,7 @@ except ImportError:      # seaborn optional — sandbox still works without it
 # Libraries generated code is allowed to import (root package names)
 _ALLOWED_IMPORT_ROOTS = {
     "math", "statistics", "datetime", "re", "json", "itertools", "collections",
-    "functools", "random", "textwrap", "io",
+    "functools", "random", "textwrap",
     "numpy", "pandas", "matplotlib", "seaborn", "scipy", "sklearn", "plotly",
 }
 
@@ -66,7 +66,7 @@ SAFE_GLOBALS = {
         "isinstance": isinstance, "type": type, "repr": repr,
         "all": all, "any": any, "divmod": divmod, "pow": pow, "format": format,
         "frozenset": frozenset, "complex": complex, "iter": iter, "next": next,
-        "slice": slice, "getattr": getattr, "hasattr": hasattr, "callable": callable,
+        "slice": slice, "hasattr": hasattr, "callable": callable,
         "__import__": _safe_import,
         # exceptions so generated code can use try/except
         "Exception": Exception, "ValueError": ValueError, "KeyError": KeyError,
@@ -199,7 +199,9 @@ def run_code(
         with matplotlib.rc_context():
             plt.close("all")   # drop any figures left over from a previous run — keeps memory flat across a long session
             body, last_expr = _split_last_expression(code)
-            namespace = {**SAFE_GLOBALS, **local_ns}
+            # fresh builtins dict per run: code can't plant something in the
+            # shared one that every later run (and session) would pick up
+            namespace = {**SAFE_GLOBALS, "__builtins__": dict(SAFE_GLOBALS["__builtins__"]), **local_ns}
             sys.settrace(_deadline_tracer(time.monotonic() + EXEC_TIMEOUT_S, EXEC_TIMEOUT_S))
             try:
                 exec(body, namespace, local_ns)  # noqa: S102
@@ -258,6 +260,8 @@ def run_code(
                 saved.append(outputs.save_csv(made_table.head(MAX_SAVED_ROWS), "table"))
             result["saved"] = [s for s in saved if s]
 
+    except codeguard.SandboxViolation as e:
+        result["error"] = f"SandboxViolation: {e}"
     except ExecutionTimeout as e:
         result["stdout"] = stdout_capture.getvalue()
         result["error"] = f"ExecutionTimeout: {e}"
@@ -298,7 +302,7 @@ def _split_last_expression(code: str):
     write notebook-style code constantly; without this they get empty output
     back and repeat themselves.
     """
-    tree = _BareExceptToException().visit(ast.parse(code, SANDBOX_FILENAME))
+    tree = codeguard.check(_BareExceptToException().visit(ast.parse(code, SANDBOX_FILENAME)))
     if not tree.body or not isinstance(tree.body[-1], ast.Expr):
         return compile(tree, SANDBOX_FILENAME, "exec"), None
     last = tree.body.pop()

@@ -36,12 +36,13 @@ def _describe_axes(ax) -> str:
     head = ", ".join(f"{k} '{v}'" for k, v in (
         ("title", ax.get_title()), ("x", ax.get_xlabel()), ("y", ax.get_ylabel())) if v)
     items = []
+    error_lines = set()   # seaborn error bars, described with their bars
     bars = [c for c in ax.containers if isinstance(c, BarContainer)]
     names = _legend_names(ax, bars)
     for c, name in zip(bars, names):
-        items.append(_bars(ax, c, name))
+        items.append(_bars(ax, c, name, error_lines))
     items.append(_pie(ax))
-    items.extend(_lines(ax))
+    items.extend(_lines(ax, skip=error_lines))
     for coll in ax.collections:
         if isinstance(coll, PathCollection) and len(coll.get_offsets()):
             pts = coll.get_offsets()
@@ -61,14 +62,15 @@ def _describe_axes(ax) -> str:
     return f"[{head or 'chart'}] " + "; ".join(i for i in items if i)
 
 
-def _lines(ax) -> list[str]:
+def _lines(ax, skip=()) -> list[str]:
     """
     Plain lines are described one by one. Box plots are drawn as many short
     segments plus marker-only "flier" points; listing those segment by segment
     is noise, so they're summarised per box (median, middle 50%, whiskers,
     outliers), falling back to one whisker span + outlier values.
     """
-    data = [(line, _nums(line.get_xdata()), _nums(line.get_ydata())) for line in ax.get_lines()]
+    data = [(line, _nums(line.get_xdata()), _nums(line.get_ydata()))
+            for line in ax.get_lines() if line not in skip]
     points = [d for d in data if _markers_only(d[0]) and d[1]]
     segments = [d for d in data if not _markers_only(d[0]) and 2 <= len(d[1]) <= 5]
     out = []
@@ -210,7 +212,7 @@ def _legend_names(ax, bars) -> list[str]:
     return names
 
 
-def _bars(ax, container, name="") -> str:
+def _bars(ax, container, name="", error_lines=None) -> str:
     horizontal = getattr(container, "orientation", "vertical") == "horizontal"
     patches = container.patches
     values = [p.get_width() if horizontal else p.get_height() for p in patches]
@@ -222,7 +224,28 @@ def _bars(ax, container, name="") -> str:
     labels = _tick_labels(ax, patches, horizontal)
     name = f" '{name}'" if name else ""
     pairs = ", ".join(f"{lab}={_f(v)}" for lab, v in zip(labels, values))
-    return f"bars{name}: {pairs}"
+    errors = _error_bars(ax, patches, labels, horizontal, error_lines)
+    return f"bars{name}: {pairs}" + (f"; error bars: {errors}" if errors else "")
+
+
+def _error_bars(ax, patches, labels, horizontal, used) -> str:
+    """
+    seaborn's barplot draws its confidence interval as one 2-point line
+    through the centre of each bar. On their own those read as a box plot's
+    whiskers (4+ bars) or as unnamed lines, so name them by bar instead.
+    """
+    centres = {round(p.get_y() + p.get_height() / 2 if horizontal else p.get_x() + p.get_width() / 2, 6): lab
+               for p, lab in zip(patches, labels)}
+    found = []
+    for line in ax.get_lines():
+        if used is None or line in used or _markers_only(line):
+            continue
+        xs, ys = _nums(line.get_xdata()), _nums(line.get_ydata())
+        pos, val = (ys, xs) if horizontal else (xs, ys)
+        if len(pos) == 2 and len(val) == 2 and pos[0] == pos[1] and round(pos[0], 6) in centres:
+            used.add(line)
+            found.append((pos[0], centres[round(pos[0], 6)], min(val), max(val)))
+    return ", ".join(f"{lab} {_f(lo)}–{_f(hi)}" for _, lab, lo, hi in sorted(found))
 
 
 def _tick_labels(ax, patches, horizontal) -> list[str]:

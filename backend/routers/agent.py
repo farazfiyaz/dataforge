@@ -353,7 +353,10 @@ def _sse(event: str, data: dict) -> str:
 def _tool_result_for_llm(result: dict) -> str:
     """Compact, token-friendly version of an execution result for the model."""
     if result.get("error"):
-        return json.dumps({"error": result["error"][-2000:]})
+        payload = {"error": result["error"][-2000:]}
+        if result.get("stdout"):   # what printed before the failing line
+            payload["stdout_before_error"] = result["stdout"][-1500:]
+        return json.dumps(payload)
     payload = {"stdout": (result.get("stdout") or "")[-3000:]}
     if result.get("table") is not None:
         payload["table_preview"] = result["table"][:10]

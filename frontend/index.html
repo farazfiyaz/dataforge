@@ -1541,6 +1541,13 @@ function finishAgentStep(stepEl, data) {
     const details = document.createElement("details");
     details.innerHTML = `<summary>${icon("caret-right")}Error</summary><pre class="code-content wrap">${escHtml(data.error)}</pre>`;
     stepEl.appendChild(details);
+    if (data.stdout) {   // what the code printed before it failed
+      const out = document.createElement("div");
+      out.className = "output";
+      out.innerHTML = `<div class="output-label">Output before the error</div><pre></pre>`;
+      out.querySelector("pre").textContent = data.stdout;
+      stepEl.appendChild(out);
+    }
   } else {
     label.innerHTML = `${icon("check")}<span>Step ${n}</span><span class="state">Done</span>`;
     renderExecutionResult(stepEl, data);

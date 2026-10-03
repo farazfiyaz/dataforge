@@ -263,7 +263,11 @@ def run_code(
         result["error"] = f"ExecutionTimeout: {e}"
         plt.close("all")
     except Exception:
+        # keep what printed before the error: the model fixes one line instead
+        # of re-running (and re-guessing) everything it had already seen
+        result["stdout"] = stdout_capture.getvalue()
         result["error"] = traceback.format_exc()
+        plt.close("all")
     finally:
         sys.stdout = old_stdout
 

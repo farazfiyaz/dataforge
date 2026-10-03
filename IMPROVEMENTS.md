@@ -325,6 +325,14 @@ already skipped. True/False columns, often the outcome itself (`churned`), got n
 chart at all, since they count as neither text nor numeric. Now ID columns and
 all-unique columns are skipped, bool columns are charted, charts follow the
 file's column order, and the six-chart cap counts only charts that are drawn.
+### 2026-10-02 — Keep output printed before an error
+When sandbox code failed partway, everything it had printed was thrown away:
+`print(df.shape)` followed by a bad `df['nope']` came back as only a KeyError,
+so neither the user nor the model saw the shape. The model then reran (and
+re-guessed) steps it had already done. The sandbox now keeps stdout on errors,
+the agent passes it to the model as `stdout_before_error`, and the failed step
+shows it under "Output before the error". Leftover figures from the failed run
+are closed too.
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`

@@ -127,6 +127,15 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-10-03 — Profile date columns as dates, not categories
+The upload profile put every date column under `kind: "categorical"`: Excel
+dates (`datetime64`) and CSV text dates like `signup_date` alike. So the card
+said "2 categorical" for one text column plus one date column, and when the
+date came first the suggested chart was "Bar chart of top values in signup", one
+bar per day. Date columns (datetime dtype, or text named like a date that
+parses as one) now get `kind: "datetime"` with their min/max, and the card reads
+"1 numeric, 1 categorical, 1 date". `find_date_column` reuses the same check.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

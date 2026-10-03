@@ -190,6 +190,16 @@ ran for 0.5s, printed "caught" and reported success. `while True: try: ... excep
 hung past the limit (killed after 20s with a 0.5s limit): once the trace hook
 raises, CPython removes it. The sandbox now compiles bare `except:` as
 `except Exception:`, which still catches every ordinary error.
+### 2026-09-28 — Upload no longer crashes on True/False columns or Excel year headers
+Two common file shapes returned a 500 error:
+- **Any True/False column** (e.g. `paid,True`): pandas counts bool as numeric, so
+  the profiler took IQR quantiles and numpy raised "boolean subtract is not
+  supported". Both upload and Auto Analyze failed. Bool columns are now profiled
+  as categorical (True/False counts).
+- **Excel sheets with year headers** (`2023`, `2024`): `read_excel` returns int
+  column names, and Auto Analyze crashed joining them into the cleaning report
+  and again when labelling the missing-values plot. Excel headers are now text,
+  the same as a CSV with the same header.
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`

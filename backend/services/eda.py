@@ -33,7 +33,9 @@ def run_eda(df: pd.DataFrame) -> dict[str, Any]:
             "is_id": is_id_column(series, col),
         }
 
-        if pd.api.types.is_numeric_dtype(series):
+        # bool counts as numeric to pandas, but quantiles of True/False raise
+        # in numpy, and a yes/no flag reads better as value counts anyway
+        if pd.api.types.is_numeric_dtype(series) and not pd.api.types.is_bool_dtype(series):
             desc = series.describe()
             col_info.update({
                 "kind": "numeric",

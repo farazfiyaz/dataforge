@@ -263,6 +263,16 @@ bare `pd.read_csv` with a forced `sep`, so `load_file("x.csv", sep=";")` raised
 a sep and a delimiter", and `usecols=`/`nrows=` on an Excel-on-Windows (cp1252) file
 raised `UnicodeDecodeError`. Now the caller's `sep`/`delimiter`/`encoding` win, and
 whatever they leave out is still sniffed. Tests in `test_workspace_load_file.py`.
+### 2026-09-30 — Explain Ollama crashes and out-of-memory in words
+Only "not running", "too slow" and "model missing" were translated. Other
+failures leaked raw text: a 500 showed `Ollama returned an error (500):
+{"error":"model requires more system memory (5.6 GiB) than is available (3.1 GiB)"}`,
+a model process that crashed or was killed mid-answer (`ReadError`,
+`RemoteProtocolError`) became "Ollama error: …" (a 502 in Explain/Code/Plot
+modes), and a non-JSON reply raised a JSON decode error. Now: out of memory says
+so and says to close other apps, other errors show Ollama's own message without
+JSON, dropped connections say Ollama stopped answering, and a garbled reply is an
+OllamaError (503). Tests in `test_llm_errors.py`.
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`

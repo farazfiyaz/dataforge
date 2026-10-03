@@ -46,11 +46,36 @@ async def _post_chat(payload: dict, timeout: float) -> dict:
             f"Ollama took longer than {timeout:g}s to answer. The model may still be loading. "
             "Try again, or ask a smaller question."
         ) from None
+    except httpx.TransportError:
+        # Connection dropped mid-answer: usually the model process crashed or
+        # the OS killed it for using too much memory.
+        raise OllamaError(
+            "Ollama stopped answering partway through (it may have crashed or run out of memory). "
+            "Close other apps and try again."
+        ) from None
     if resp.status_code == 404 and "not found" in resp.text.lower():
         raise OllamaError(f"The model `{model}` isn't downloaded yet. Run `ollama pull {model}` and try again.")
     if resp.status_code >= 400:
-        raise OllamaError(f"Ollama returned an error ({resp.status_code}): {resp.text[:300]}")
-    return resp.json()
+        detail = _error_text(resp)
+        if "more system memory" in detail.lower():
+            raise OllamaError(
+                f"There isn't enough free memory to run `{model}` ({detail}). "
+                "Close other apps (browsers use a lot) and try again."
+            )
+        raise OllamaError(f"Ollama returned an error ({resp.status_code}): {detail[:300]}")
+    try:
+        return resp.json()
+    except ValueError:
+        raise OllamaError(f"Ollama sent an unreadable reply: {resp.text[:200]!r}") from None
+
+
+
+def _error_text(resp: httpx.Response) -> str:
+    """Ollama's own error message ({"error": "..."}), or the raw body if it isn't JSON."""
+    try:
+        return str(resp.json()["error"])
+    except (ValueError, KeyError, TypeError):
+        return resp.text
 
 
 async def call_ollama(system_prompt: str, user_message: str, model: str | None = None) -> str:

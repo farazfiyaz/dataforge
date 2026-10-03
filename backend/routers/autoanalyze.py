@@ -15,6 +15,7 @@ from services.eda import run_eda
 from services.cleaner import auto_clean
 from services.autoplot import generate_all_plots
 from services.loader import read_table
+from services import outputs
 
 router = APIRouter()
 
@@ -40,6 +41,11 @@ async def autoanalyze(file: UploadFile = File(...)):
     # 3. Generate plots
     plots = generate_all_plots(df_original, df_cleaned)
 
+    # Keep copies in Documents/DataForge (skipped silently if that fails)
+    name = file.filename.rsplit(".", 1)[0]
+    saved = [outputs.save_csv(df_cleaned, f"cleaned_{name}")]
+    saved += [outputs.save_png(p["chart"], f"{name}_{p['title']}") for p in plots]
+
     # 4. Encode cleaned CSV as base64 for download
     csv_bytes = df_cleaned.to_csv(index=False).encode()
     cleaned_csv_b64 = base64.b64encode(csv_bytes).decode()
@@ -50,5 +56,6 @@ async def autoanalyze(file: UploadFile = File(...)):
         "cleaning_report": cleaning_report,
         "cleaned_shape": {"rows": len(df_cleaned), "cols": len(df_cleaned.columns)},
         "cleaned_csv_b64": cleaned_csv_b64,
+        "saved": [s for s in saved if s],
         "plots": plots,
     }

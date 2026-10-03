@@ -36,3 +36,10 @@ def no_workspace():
     workspace._workspace_root = None
     yield
     workspace._workspace_root = None
+
+
+@pytest.fixture(autouse=True)
+def temp_outputs(tmp_path, monkeypatch):
+    """Saved charts/tables go to a temp folder, never the user's Documents."""
+    from services import outputs
+    monkeypatch.setattr(outputs, "OUTPUT_ROOT", tmp_path / "outputs")

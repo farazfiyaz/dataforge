@@ -452,6 +452,17 @@ button { cursor: pointer; }
 /* Tables */
 .inline-table-wrap { overflow-x: auto; margin: 10px 0; max-height: 440px; overflow-y: auto; }
 .inline-table { border-collapse: collapse; font-size: 13px; min-width: 100%; }
+/* Download buttons and "saved to" notes under charts and tables */
+.out-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 12px; }
+.dl-btn {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px;
+  background: none; border: 1px solid var(--rule); font-size: 12px; color: var(--ink-2);
+  transition: border-color .12s, color .12s, background .12s;
+}
+.dl-btn:hover { border-color: var(--field-text); color: var(--field-text); background: var(--field-tint); }
+.dl-btn .ic { font-size: 12px; }
+.saved-note { font-size: 12px; color: var(--ink-3); margin: 2px 0 10px; }
+.saved-note .link-btn { background: none; border: 0; padding: 0; font-size: 12px; color: var(--field-text); text-decoration: underline; }
 .inline-table th {
   position: sticky; top: 0; background: var(--paper);
   text-align: left; font-weight: 600; white-space: nowrap;
@@ -1810,9 +1821,11 @@ function renderAutoAnalyzeResult(turn, data) {
       img.alt = plot.title || "Chart";
       img.src = "data:image/png;base64," + plot.chart;
       fig.appendChild(img);
+      fig.appendChild(chartDownload(plot.chart, slug(plot.title, "chart")));
       turn.appendChild(fig);
     });
   }
+  if (data.saved?.length) turn.appendChild(savedNote(data.saved));
 
   scrollBottom();
 }
@@ -1821,9 +1834,16 @@ function renderAutoAnalyzeResult(turn, data) {
 function renderAssistantContent(turn, text, fileRef) {
   splitByCodeBlocks(text).forEach(part => {
     if (part.type === "text" && part.content.trim()) {
-      const p = document.createElement("div");
-      p.className = "msg-body"; p.textContent = part.content.trim();
-      turn.appendChild(p);
+      splitMarkdownTables(part.content).forEach(seg => {
+        if (seg.type === "table") {
+          turn.appendChild(buildTable(seg.keys, seg.rows));
+          turn.appendChild(tableDownload(seg.keys, seg.rows, "answer-table"));
+        } else if (seg.content.trim()) {
+          const p = document.createElement("div");
+          p.className = "msg-body"; p.textContent = seg.content.trim();
+          turn.appendChild(p);
+        }
+      });
     } else if (part.type === "code") {
       turn.appendChild(buildCodeBlock(part.lang, part.content, fileRef));
     }
@@ -1891,26 +1911,112 @@ async function runCode(code, csvRaw, datasetId = "") {
 }
 
 const NUMERIC_RE = /^-?[\d,]*\.?\d+(e[-+]?\d+)?%?$/i;
+
+// ── Downloads, saved-file notes, tables ──
+function downloadHref(filename, href) {
+  const a = document.createElement("a");
+  a.href = href; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function toCsv(keys, rows) {
+  const cell = v => {
+    const t = v === null || v === undefined ? "" : String(v);
+    return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  return [keys.map(cell).join(","), ...rows.map(r => keys.map(k => cell(r[k])).join(","))].join("\n");
+}
+function slug(text, fallback) {
+  return (text || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50) || fallback;
+}
+function dlButton(label, onClick) {
+  const b = document.createElement("button");
+  b.className = "dl-btn";
+  b.innerHTML = `${icon("download-simple")}${escHtml(label)}`;
+  b.addEventListener("click", onClick);
+  return b;
+}
+function actionsRow(...buttons) {
+  const row = document.createElement("div");
+  row.className = "out-actions";
+  buttons.forEach(b => row.appendChild(b));
+  return row;
+}
+function chartDownload(b64, name) {
+  return actionsRow(dlButton("Download PNG", () => downloadHref(`${name}.png`, "data:image/png;base64," + b64)));
+}
+function tableDownload(keys, rows, name) {
+  return actionsRow(dlButton("Download CSV", () => {
+    const url = URL.createObjectURL(new Blob([toCsv(keys, rows)], { type: "text/csv" }));
+    downloadHref(`${name}.csv`, url);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }));
+}
+// "Saved to Documents\DataForge: …  Open folder". The files are the user's to
+// delete; opening the folder recreates it if it's gone.
+function savedNote(saved) {
+  const note = document.createElement("div");
+  note.className = "saved-note";
+  note.innerHTML = `Saved to Documents\\DataForge: ${saved.map(escHtml).join(", ")} · <button class="link-btn">Open folder</button>`;
+  note.querySelector("button").addEventListener("click", () =>
+    fetch(`${API}/outputs/open`, { method: "POST" }).catch(() => {}));
+  return note;
+}
+function buildTable(keys, rows) {
+  const isNum = v => typeof v === "number" || (typeof v === "string" && NUMERIC_RE.test(v.trim()));
+  const wrap = document.createElement("div");
+  wrap.className = "inline-table-wrap";
+  wrap.innerHTML = `<table class="inline-table">
+    <thead><tr>${keys.map(k => `<th${isNum(rows[0]?.[k]) ? ' class="num"' : ""}>${escHtml(k)}</th>`).join("")}</tr></thead>
+    <tbody>${rows.map(row => `<tr>${keys.map(k => `<td${isNum(row[k]) ? ' class="num"' : ""}>${escHtml(String(row[k] ?? ""))}</td>`).join("")}</tr>`).join("")}</tbody>
+  </table>`;
+  return wrap;
+}
+
+// Markdown tables in an answer (| a | b | / |---|---| / rows) → real tables
+const MD_TABLE_SEP = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/;
+function mdCells(line) {
+  return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(c => c.trim().replace(/\*\*/g, ""));
+}
+function splitMarkdownTables(text) {
+  const lines = text.split("\n"), parts = [];
+  let buf = [];
+  const flush = () => { if (buf.join("").trim()) parts.push({ type: "text", content: buf.join("\n") }); buf = []; };
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim().startsWith("|") && MD_TABLE_SEP.test(lines[i + 1] || "")) {
+      flush();
+      const header = mdCells(lines[i]);
+      const keys = header.map((h, j) => header.indexOf(h) === j ? (h || `col${j + 1}`) : `${h} (${j + 1})`);
+      const rows = [];
+      i += 2;
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        const cells = mdCells(lines[i]);
+        rows.push(Object.fromEntries(keys.map((k, j) => [k, cells[j] ?? ""])));
+        i++;
+      }
+      i--;
+      parts.push({ type: "table", keys, rows });
+    } else {
+      buf.push(lines[i]);
+    }
+  }
+  flush();
+  return parts;
+}
 function renderExecutionResult(turn, data) {
   const charts = data.charts || (data.chart ? [data.chart] : []);
-  charts.forEach(chart => {
+  charts.forEach((chart, i) => {
     const img = document.createElement("img");
     img.className = "inline-chart";
     img.loading = "lazy";
     img.alt = "Chart generated by the code";
     img.src = "data:image/png;base64," + chart;
     turn.appendChild(img);
+    turn.appendChild(chartDownload(chart, `chart-${i + 1}`));
   });
   if (data.table?.length) {
     const keys = Object.keys(data.table[0]);
-    const isNum = v => typeof v === "number" || (typeof v === "string" && NUMERIC_RE.test(v.trim()));
-    const wrap = document.createElement("div");
-    wrap.className = "inline-table-wrap";
-    wrap.innerHTML = `<table class="inline-table">
-      <thead><tr>${keys.map(k=>`<th${isNum(data.table[0][k]) ? ' class="num"' : ""}>${escHtml(k)}</th>`).join("")}</tr></thead>
-      <tbody>${data.table.map(row=>`<tr>${keys.map(k=>`<td${isNum(row[k]) ? ' class="num"' : ""}>${escHtml(String(row[k]))}</td>`).join("")}</tr>`).join("")}</tbody>
-    </table>`;
-    turn.appendChild(wrap);
+    turn.appendChild(buildTable(keys, data.table));
+    turn.appendChild(tableDownload(keys, data.table, "table"));
   }
   if (data.stdout) {
     const out = document.createElement("div");
@@ -1922,6 +2028,7 @@ function renderExecutionResult(turn, data) {
   if (!charts.length && !data.table?.length && !data.stdout) {
     appendText(turn, "The code ran and printed nothing.");
   }
+  if (data.saved?.length) turn.appendChild(savedNote(data.saved));
   scrollBottom();
 }
 

@@ -20,6 +20,8 @@ Copyright © 2026 Mohammed Farazuddin · [farazfiyaz2@gmail.com](mailto:farazfiy
 
 **📂 Real-world files** — CSVs saved by Excel on Windows (cp1252), semicolon-separated files with decimal commas (European Excel exports), tab-separated files, `.xlsx` and `.xls` all load correctly.
 
+**💾 Everything is saved** — every chart can be downloaded as PNG and every table as CSV, and DataForge also keeps a copy of each chart, result table and cleaned file in `Documents\DataForge\<date>\`. Delete anything you don't need; DataForge doesn't mind.
+
 **🗄️ Big-data aware** — datasets are parsed once and stored server-side (referenced by id, never re-uploaded per message), and the agent is trained to sample before plotting and never dump full DataFrames.
 
 **🔒 Local by default** — FastAPI backend + Ollama LLM + Electron desktop shell. Out of the box there is no cloud, no API key, and no data leaving your machine. The backend listens on `127.0.0.1` only and rejects requests from other websites, so nothing else on your machine or network can reach the code-execution API.

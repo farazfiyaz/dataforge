@@ -60,6 +60,7 @@ def build_system_prompt(mode: str, context: Optional[str]) -> str:
             "\n  - State the formula or method used (e.g. 'Standard deviation = sqrt(variance)')"
             "\n  - Interpret what the numbers mean in context"
             "\n  - Point out anything surprising or worth investigating"
+            "\nWhen comparing several items or listing values per group, use a Markdown table."
             "\nBe concise but thorough."
         )
     return base

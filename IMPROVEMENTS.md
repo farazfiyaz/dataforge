@@ -159,6 +159,15 @@ facts and news aren't "your data", and with search on it includes today's date.
 Live (qwen2.5-coder:7b): "latest pandas version" searched and answered 3.0.6; "what is a
 p-value" answered without searching; "churn rate in my data" asked for a file. The
 7B model still searched "2022 World Cup" for "most recent World Cup" despite the date.
+### 2026-09-30 — Download buttons, tables in answers, auto-save to Documents\DataForge
+- Every chart has **Download PNG**; every result table (and table in an answer) has **Download CSV**.
+- Answers render Markdown tables as real tables, and the model is told to use tables
+  when listing values per group.
+- Charts, tables produced by the code, and Auto Analyze's cleaned data and charts are
+  saved to `Documents/DataForge/<date>/`, each shown with a "Saved to … · Open folder"
+  note. Only tables made in that step are saved (not the unchanged dataset every step).
+  The files are the user's to delete: the folder is recreated on the next save, and a
+  failed save is skipped, never an error. Folder: `DATAFORGE_OUTPUT_DIR`.
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
@@ -168,3 +177,4 @@ p-value" answered without searching; "churn rate in my data" asked for a file. T
 - `/api/upload` reads the whole file into memory with no size limit.
 - Recommendations could offer "one-click run" instead of just filling the input.
 - Box plots with several boxes are summarised as one combined span; per-box medians/quartiles would be better.
+- Live: for "churn rate per plan as a bar chart" the model ran `sns.barplot(y='churn', estimator=...)` on the yes/no text column, giving an empty chart (the table was right). Tell it to compute the rate first and plot that.

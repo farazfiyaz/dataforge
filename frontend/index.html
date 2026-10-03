@@ -1640,6 +1640,7 @@ function pct(part, whole) {
 function renderEdaResponse(turn, profile, filename, fileObj) {
   const numeric = profile.columns.filter(c => c.kind === "numeric");
   const categ   = profile.columns.filter(c => c.kind === "categorical");
+  const dates   = profile.columns.filter(c => c.kind === "datetime").length;
   const rows = profile.shape.rows, cols = profile.shape.cols;
   const totalNulls = profile.columns.reduce((a,c) => a + c.null_count, 0);
 
@@ -1652,7 +1653,7 @@ function renderEdaResponse(turn, profile, filename, fileObj) {
   readings.className = "profile";
   readings.innerHTML = `
     <div class="reading"><div class="value">${rows.toLocaleString()}</div><div class="label">Rows</div><div class="ctx">${profile.duplicates.toLocaleString()} duplicated</div></div>
-    <div class="reading"><div class="value">${cols}</div><div class="label">Columns</div><div class="ctx">${numeric.length} numeric, ${categ.length} categorical</div></div>
+    <div class="reading"><div class="value">${cols}</div><div class="label">Columns</div><div class="ctx">${numeric.length} numeric, ${categ.length} categorical${dates ? `, ${dates} date` : ""}</div></div>
     <div class="reading"><div class="value">${totalNulls.toLocaleString()}</div><div class="label">Missing values</div><div class="ctx">${pct(totalNulls, rows * cols)} of all cells</div></div>
     <div class="reading"><div class="value">${profile.duplicates.toLocaleString()}</div><div class="label">Duplicate rows</div><div class="ctx">${pct(profile.duplicates, rows)} of rows</div></div>
   `;

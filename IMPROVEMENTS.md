@@ -356,6 +356,14 @@ session and data. The frontend now keeps an in-memory map from chat to
 opened, and starts new chats and project pages with no session. `dataforge_db`
 is unchanged. The backend's dataset store is in memory too, so persisting the
 ids across restarts wouldn't help.
+### 2026-10-03 — Profile date columns as dates, not categories
+The upload profile put every date column under `kind: "categorical"`: Excel
+dates (`datetime64`) and CSV text dates like `signup_date` alike. So the card
+said "2 categorical" for one text column plus one date column, and when the
+date came first the suggested chart was "Bar chart of top values in signup", one
+bar per day. Date columns (datetime dtype, or text named like a date that
+parses as one) now get `kind: "datetime"` with their min/max, and the card reads
+"1 numeric, 1 categorical, 1 date". `find_date_column` reuses the same check.
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`

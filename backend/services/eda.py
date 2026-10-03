@@ -48,6 +48,16 @@ def run_eda(df: pd.DataFrame) -> dict[str, Any]:
                 "q75": _safe(desc.get("75%")),
                 "outlier_count": int(_count_outliers(series)),
             })
+        elif _is_date_column(series, col):
+            # Dates aren't categories: "top values of signup_date" is a
+            # meaningless chart, and the profile counted them as categorical
+            dates = _as_dates(series).dropna()
+            col_info.update({
+                "kind": "datetime",
+                "unique_count": int(series.nunique()),
+                "min": dates.min().isoformat() if len(dates) else None,
+                "max": dates.max().isoformat() if len(dates) else None,
+            })
         else:
             col_info.update({
                 "kind": "categorical",
@@ -79,17 +89,28 @@ def find_date_column(df: pd.DataFrame) -> str | None:
         if pd.api.types.is_datetime64_any_dtype(df[c]):
             return c
     for c in df.columns:
-        # object (pandas 2) or str (pandas 3) columns named like dates
-        if (df[c].dtype == object or pd.api.types.is_string_dtype(df[c])) and _DATE_HINTS.search(str(c)):
-            sample = df[c].dropna().astype(str).head(50)
-            if sample.empty:
-                continue
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                parsed = pd.to_datetime(sample, errors="coerce")
-            if parsed.notna().mean() > 0.8:
-                return c
+        if _is_date_column(df[c], c):
+            return c
     return None
+
+
+def _is_date_column(s: pd.Series, name) -> bool:
+    """A datetime dtype, or text named like a date that parses as one."""
+    if pd.api.types.is_datetime64_any_dtype(s):
+        return True
+    # object (pandas 2) or str (pandas 3) columns named like dates
+    if not ((s.dtype == object or pd.api.types.is_string_dtype(s)) and _DATE_HINTS.search(str(name))):
+        return False
+    sample = s.dropna().astype(str).head(50)
+    return not sample.empty and _as_dates(sample).notna().mean() > 0.8
+
+
+def _as_dates(s: pd.Series) -> pd.Series:
+    if pd.api.types.is_datetime64_any_dtype(s):
+        return s
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return pd.to_datetime(s.astype(str).where(s.notna()), errors="coerce")
 
 
 

@@ -7,11 +7,12 @@ Describe a rendered matplotlib figure in text, for the agent.
 The model can't see the PNGs it draws — it used to be told only "chart
 rendered", so it answered "the highest bar is the answer" without knowing
 which bar that was. This reads the plotted data back out of the figure:
-bar labels and heights, line and scatter ranges, heatmap value ranges.
+bar labels and heights, pie shares, line and scatter ranges, heatmap value ranges.
 """
 
 from matplotlib.collections import PathCollection, QuadMesh
 from matplotlib.container import BarContainer
+from matplotlib.patches import Wedge
 
 MAX_BARS_LISTED = 20
 MAX_BOXES_LISTED = 12
@@ -35,9 +36,11 @@ def _describe_axes(ax) -> str:
     head = ", ".join(f"{k} '{v}'" for k, v in (
         ("title", ax.get_title()), ("x", ax.get_xlabel()), ("y", ax.get_ylabel())) if v)
     items = []
-    for c in ax.containers:
-        if isinstance(c, BarContainer):
-            items.append(_bars(ax, c))
+    bars = [c for c in ax.containers if isinstance(c, BarContainer)]
+    names = _legend_names(ax, bars)
+    for c, name in zip(bars, names):
+        items.append(_bars(ax, c, name))
+    items.append(_pie(ax))
     items.extend(_lines(ax))
     for coll in ax.collections:
         if isinstance(coll, PathCollection) and len(coll.get_offsets()):
@@ -53,7 +56,7 @@ def _describe_axes(ax) -> str:
         arr = img.get_array()
         if arr is not None and arr.size:
             items.append(f"image/heatmap: values {_f(arr.min())} to {_f(arr.max())}")
-    if not items:
+    if not any(items):
         return ""
     return f"[{head or 'chart'}] " + "; ".join(i for i in items if i)
 
@@ -191,7 +194,23 @@ def _nums(values) -> list[float]:
     return [float(v) for v in values if _is_num(v)]
 
 
-def _bars(ax, container) -> str:
+def _legend_names(ax, bars) -> list[str]:
+    """
+    Name of each bar series. pandas labels its containers; seaborn (`hue=`)
+    leaves them as `_container0`, so fall back to the legend, which lists the
+    series in drawing order.
+    """
+    names = [c.get_label() or "" for c in bars]
+    names = ["" if n.startswith("_") else n for n in names]
+    legend = ax.get_legend()
+    if len(bars) > 1 and not any(names) and legend:
+        texts = [t.get_text() for t in legend.get_texts()]
+        if len(texts) == len(bars):
+            return texts
+    return names
+
+
+def _bars(ax, container, name="") -> str:
     horizontal = getattr(container, "orientation", "vertical") == "horizontal"
     patches = container.patches
     values = [p.get_width() if horizontal else p.get_height() for p in patches]
@@ -201,21 +220,44 @@ def _bars(ax, container) -> str:
         at = p.get_y() + p.get_height() / 2 if horizontal else p.get_x() + p.get_width() / 2
         return f"{len(values)} bars (histogram-like), tallest {_f(values[tallest])} at {_f(at)}"
     labels = _tick_labels(ax, patches, horizontal)
-    name = container.get_label()
-    name = "" if not name or name.startswith("_") else f" '{name}'"
+    name = f" '{name}'" if name else ""
     pairs = ", ".join(f"{lab}={_f(v)}" for lab, v in zip(labels, values))
     return f"bars{name}: {pairs}"
 
 
 def _tick_labels(ax, patches, horizontal) -> list[str]:
-    """Category label under each bar (matched by position), else the bar's position."""
+    """
+    Category label under each bar (matched by position), else the bar's position.
+    Grouped bars (`unstack().plot.bar()`, seaborn `hue=`) sit a fixed offset
+    beside their tick, so a series whose bars are all off-tick by the same
+    amount, less than half the tick spacing, takes the nearest tick's label.
+    """
     ticks = ax.get_yticklabels() if horizontal else ax.get_xticklabels()
     by_pos = {round(t.get_position()[1 if horizontal else 0], 6): t.get_text() for t in ticks if t.get_text()}
-    labels = []
-    for p in patches:
-        centre = p.get_y() + p.get_height() / 2 if horizontal else p.get_x() + p.get_width() / 2
-        labels.append(by_pos.get(round(centre, 6)) or _f(centre))
-    return labels
+    centres = [p.get_y() + p.get_height() / 2 if horizontal else p.get_x() + p.get_width() / 2 for p in patches]
+    labels = [by_pos.get(round(c, 6)) for c in centres]
+    positions = sorted(by_pos)
+    if not all(labels) and len(positions) >= 2:
+        spacing = min(b - a for a, b in zip(positions, positions[1:]))
+        nearest = [min(positions, key=lambda t: abs(t - c)) for c in centres]
+        offsets = [c - t for c, t in zip(centres, nearest)]
+        if (len(set(nearest)) == len(nearest) and max(offsets) - min(offsets) < 1e-6
+                and abs(offsets[0]) < spacing / 2):
+            labels = [by_pos[t] for t in nearest]
+    return [lab or _f(c) for lab, c in zip(labels, centres)]
+
+
+def _pie(ax) -> str:
+    """Pie charts: each wedge's share of the whole (the raw values aren't kept by matplotlib)."""
+    wedges = [p for p in ax.patches if isinstance(p, Wedge)]
+    if not wedges:
+        return ""
+    shares = [(w.theta2 - w.theta1) / 360 * 100 for w in wedges]
+    names = [w.get_label() if w.get_label() and not w.get_label().startswith("_") else f"slice {i + 1}"
+             for i, w in enumerate(wedges)]
+    shown = ", ".join(f"{n} {s:.1f}%" for n, s in list(zip(names, shares))[:MAX_BARS_LISTED])
+    more = f", +{len(wedges) - MAX_BARS_LISTED} more" if len(wedges) > MAX_BARS_LISTED else ""
+    return f"pie, {len(wedges)} slices: {shown}{more}"
 
 
 def _is_num(v) -> bool:

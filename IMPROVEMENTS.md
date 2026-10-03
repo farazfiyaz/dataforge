@@ -291,6 +291,13 @@ The sandbox turned result DataFrames into table rows with `fillna("")`, which ca
 Tables are now built from plain values (dates, intervals and tuple column names
 as text, blanks for gaps), and a table that still can't be built is left out
 without failing the run. Tests: `tests/test_result_tables.py` (3 of 4 fail on the old code).
+### 2026-10-01 — train_model on binned (categorical) targets
+"Predict the tenure group" leads the agent to `pd.cut` a column and train on it.
+`train_model` crashed with sklearn's "Unknown label type: unknown" because the
+labels were `Interval` objects. Named bins (`labels=["new", "mid", "loyal"]`)
+trained, but the confusion matrix sorted them alphabetically, and a categorical
+with more than 10 numeric categories was treated as regression. Categorical
+targets are now always classification, encoded in the categories' own order.
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`

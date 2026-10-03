@@ -68,12 +68,20 @@ def train_model(df: pd.DataFrame, target: str, task: str = None,
     # ── auto-detect task ──
     # text labels are dtype `object` in pandas 2 but `str` in pandas 3
     y_is_text = pd.api.types.is_object_dtype(y) or pd.api.types.is_string_dtype(y)
+    y_is_cat = isinstance(y.dtype, pd.CategoricalDtype)
     if task is None:
-        task = "classification" if (y_is_text or y.dtype == bool
+        task = "classification" if (y_is_text or y_is_cat or y.dtype == bool
                                     or y.nunique() <= 10) else "regression"
 
     label_encoder = None
-    if task == "classification" and y_is_text:
+    if task == "classification" and y_is_cat:
+        # binned targets (pd.cut) hold Interval labels sklearn rejects as
+        # "unknown"; encode by the categories' own order so bins stay sorted
+        y = y.cat.remove_unused_categories()
+        label_encoder = LabelEncoder()
+        label_encoder.classes_ = np.array([str(c) for c in y.cat.categories], dtype=object)
+        y = pd.Series(y.cat.codes.astype(int), index=data.index)
+    elif task == "classification" and y_is_text:
         label_encoder = LabelEncoder()
         y = pd.Series(label_encoder.fit_transform(y), index=data.index)
 

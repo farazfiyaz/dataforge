@@ -40,8 +40,9 @@ async def autoanalyze(file: UploadFile = File(...)):
     # 3. Generate plots
     plots = generate_all_plots(df_original, df_cleaned)
 
-    # 4. Encode cleaned CSV as base64 for download
-    csv_bytes = df_cleaned.to_csv(index=False).encode()
+    # 4. Encode cleaned CSV as base64 for download. The BOM tells Excel on
+    # Windows it's UTF-8; without it Excel reads cp1252 and shows "cafÃ©".
+    csv_bytes = df_cleaned.to_csv(index=False).encode("utf-8-sig")
     cleaned_csv_b64 = base64.b64encode(csv_bytes).decode()
 
     return {

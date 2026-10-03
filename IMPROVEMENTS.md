@@ -127,6 +127,14 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-10-04 — Keep accented text intact in the cleaned CSV download
+Auto Analyze's "Download cleaned CSV" garbled every non-ASCII character twice
+over. The frontend passed `atob()`'s byte string straight to `new Blob`, which
+re-encodes each byte ≥ 0x80 as UTF-8, so "café" saved as "cafÃ©" whatever
+opened it. It now builds the Blob from a `Uint8Array`. The backend also writes
+the CSV with a UTF-8 BOM, because Excel on Windows reads a BOM-less CSV as
+cp1252 and would still show "cafÃ©". pandas strips the BOM on reading.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

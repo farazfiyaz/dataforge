@@ -780,29 +780,53 @@ button { cursor: pointer; }
 const API = "/api";   // same origin: the port changes every launch
 
 // ── Persistence ──
-function loadDB() {
-  try { return JSON.parse(localStorage.getItem("dataforge_db") || "null") || defaultDB(); }
-  catch { return defaultDB(); }
-}
-// `db` is always up to date in memory; only the (expensive, whole-DB) localStorage
-// write is debounced, so rapid-fire saves during a fast conversation don't each
-// re-serialize every project/chat/message on the main thread.
+// Projects and chats are kept by the backend, encrypted on disk
+// (services/history.py). The server inlines them into this page as
+// #df-history, so they're here before anything renders. Older versions kept
+// them in localStorage in plain text: that copy is moved over once, then deleted.
+const LEGACY_DB_KEY = "dataforge_db";
 let _saveTimer = null;
+let _migrating = false;
+function loadDB() {
+  let saved = null;
+  try { saved = JSON.parse(document.getElementById("df-history")?.textContent || "null"); } catch {}
+  if (!saved) {
+    try { saved = JSON.parse(localStorage.getItem(LEGACY_DB_KEY) || "null"); } catch {}
+    _migrating = Boolean(saved);
+  }
+  return saved || defaultDB();
+}
+function putDB() {
+  return fetch(`${API}/history/`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ db }),
+  }).then(res => {
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (_migrating) {
+      _migrating = false;
+      try { localStorage.removeItem(LEGACY_DB_KEY); } catch {}
+    }
+  }).catch(err => console.error("[DataForge] Could not save history:", err));
+}
+// `db` is always up to date in memory; only the (expensive, whole-DB) save is
+// debounced, so rapid-fire saves during a fast conversation don't each
+// re-serialize every project/chat/message.
 function saveDB() {
   clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(() => localStorage.setItem("dataforge_db", JSON.stringify(db)), 400);
+  _saveTimer = setTimeout(putDB, 400);
 }
+// Electron calls this before closing the window and waits for it
 function flushDB() {
   clearTimeout(_saveTimer);
-  localStorage.setItem("dataforge_db", JSON.stringify(db));
+  return putDB();
 }
-window.addEventListener("beforeunload", flushDB);
+window.addEventListener("beforeunload", () => { if (_saveTimer) flushDB(); });
 function defaultDB() {
   return { projects: [{ id: uid(), name: "General", chats: [] }] };
 }
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
 let db = loadDB();
+if (_migrating) flushDB();
 
 // ── Session state ──
 let state = {

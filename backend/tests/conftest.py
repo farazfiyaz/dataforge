@@ -37,6 +37,23 @@ def temp_settings(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def memory_vault(monkeypatch):
+    """Never read or write the real OS credential store in tests."""
+    from services import vault
+    store = {}
+    monkeypatch.setattr(vault, "get", lambda name: store.get(name, ""))
+    monkeypatch.setattr(vault, "put", lambda name, value: store.__setitem__(name, value) if value else store.pop(name, None))
+    return store
+
+
+@pytest.fixture(autouse=True)
+def temp_history(tmp_path, monkeypatch):
+    """Never read or write the user's real ~/.dataforge/history.bin in tests."""
+    from services import history
+    monkeypatch.setattr(history, "HISTORY_PATH", tmp_path / "history.bin")
+
+
+@pytest.fixture(autouse=True)
 def no_workspace():
     """The workspace folder is process-global; don't let one test's leak into another."""
     from services import workspace

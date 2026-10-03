@@ -6,12 +6,15 @@ Which model answers: the local Ollama model (the default) or, if the user
 opts in, a cloud model (Claude via the Anthropic API).
 
 Saved as JSON in the user's home folder, never inside the repo. The API key
-is never sent back to the page; only its last four characters are.
+is kept in the OS credential store, not that file, and is never sent back to
+the page; only its last four characters are.
 """
 
 import json
 import os
 from pathlib import Path
+
+from services import vault
 
 SETTINGS_PATH = Path(os.environ.get("DATAFORGE_SETTINGS", Path.home() / ".dataforge" / "settings.json"))
 
@@ -30,12 +33,34 @@ _DEFAULTS = {"provider": "local", "local_model": "", "claude_model": DEFAULT_CLA
              "web_search": False}   # opt-in: sends only the search query to the web
 
 
+def _write(settings: dict) -> None:
+    """settings.json never holds the key: that lives in the OS credential store (services/vault.py)."""
+    SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    on_disk = {k: v for k, v in settings.items() if k != "claude_api_key"}
+    SETTINGS_PATH.write_text(json.dumps(on_disk, indent=2), encoding="utf-8")
+
+
+def _stored_key() -> str:
+    try:
+        return vault.get(vault.API_KEY)
+    except vault.VaultUnavailable:
+        return ""
+
+
 def load() -> dict:
     try:
         saved = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         saved = {}
-    return {**_DEFAULTS, **{k: v for k, v in saved.items() if k in _DEFAULTS}}
+    saved = {k: v for k, v in saved.items() if k in _DEFAULTS}
+    if plaintext := saved.pop("claude_api_key", ""):
+        # Older versions saved the key in this file in plain text: move it once
+        try:
+            vault.put(vault.API_KEY, plaintext)
+            _write(saved)
+        except vault.VaultUnavailable:
+            return {**_DEFAULTS, **saved, "claude_api_key": plaintext}
+    return {**_DEFAULTS, **saved, "claude_api_key": _stored_key()}
 
 
 def save(changes: dict) -> dict:
@@ -50,8 +75,13 @@ def save(changes: dict) -> dict:
     updated["web_search"] = bool(updated["web_search"])
     if updated["provider"] == "claude" and not claude_api_key(updated):
         raise ValueError("Add an Anthropic API key to use the cloud model.")
-    SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SETTINGS_PATH.write_text(json.dumps(updated, indent=2), encoding="utf-8")
+    if updated["claude_api_key"] != current["claude_api_key"]:
+        try:
+            vault.put(vault.API_KEY, updated["claude_api_key"])
+        except vault.VaultUnavailable:
+            raise ValueError("This computer has no credential store to keep the key in safely. "
+                             "Set the ANTHROPIC_API_KEY environment variable instead.")
+    _write(updated)
     return updated
 
 

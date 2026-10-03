@@ -314,6 +314,18 @@ async function createWindow() {
   mainWindow.webContents.on("will-navigate", stayHome);
   mainWindow.webContents.on("will-redirect", stayHome);
 
+  // Chat history is saved by the backend (encrypted) a moment after each
+  // change; let a pending save finish before the window goes away
+  let flushed = false;
+  mainWindow.on("close", event => {
+    if (flushed) return;
+    event.preventDefault();
+    flushed = true;
+    const giveUp = new Promise(resolve => setTimeout(resolve, 3000));
+    Promise.race([mainWindow.webContents.executeJavaScript("flushDB()").catch(() => {}), giveUp])
+      .finally(() => mainWindow?.close());
+  });
+
   mainWindow.on("closed", () => { mainWindow = null; });
 }
 

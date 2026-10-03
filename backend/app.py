@@ -9,11 +9,15 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 import base64
 import hashlib
 import hmac
+import json
 import os
 import re
 import secrets
+import time
 
-from routers import upload, chat, execute, autoanalyze, agent, settings
+from routers import upload, chat, execute, autoanalyze, agent, settings, history as history_router
+from services import history
+from services.vault import VaultUnavailable
 
 HOST = "127.0.0.1"
 # Electron picks a free port per launch, so another program sitting on a fixed
@@ -84,6 +88,7 @@ app.include_router(execute.router,     prefix="/api/execute",     tags=["execute
 app.include_router(autoanalyze.router, prefix="/api/autoanalyze", tags=["autoanalyze"])
 app.include_router(agent.router,       prefix="/api/agent",       tags=["agent"])
 app.include_router(settings.router,    prefix="/api/settings",    tags=["settings"])
+app.include_router(history_router.router, prefix="/api/history", tags=["history"])
 
 # Serve frontend
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
@@ -121,8 +126,27 @@ def root(request: Request, t: str | None = None):
         return HTMLResponse("Open DataForge from the app (or the link printed when the server started).", status_code=401)
     with open(os.path.join(FRONTEND_DIR, "index.html"), encoding="utf-8") as f:
         html = f.read()
+    html = html.replace("<script>", _history_block() + "\n<script>", 1)
     return HTMLResponse(html, headers={"Content-Security-Policy": _content_security_policy(html),
                                        "Cache-Control": "no-store"})
+
+
+def _history_block() -> str:
+    """
+    The decrypted history, inlined as inert JSON so the page has it the moment
+    its script starts (it used to read localStorage synchronously). Not run as
+    script, so CSP doesn't apply; '<' is escaped so data can't close the tag.
+    """
+    try:
+        saved = history.load()
+    except history.HistoryUnreadable:
+        # Don't let the next save overwrite it: set it aside and start fresh
+        history.HISTORY_PATH.replace(history.HISTORY_PATH.with_name(f"history.unreadable-{int(time.time())}.bin"))
+        saved = None
+    except VaultUnavailable:
+        saved = None
+    payload = json.dumps(saved).replace("<", "\\u003c")
+    return f'<script type="application/json" id="df-history">{payload}</script>'
 
 
 @app.get("/health")

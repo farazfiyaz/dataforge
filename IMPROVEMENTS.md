@@ -127,6 +127,18 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-10-03 — Each chat keeps its own dataset and agent kernel
+The agent session id was one global, and a saved chat kept only the file's name
+and profile. So "New chat" kept talking to the previous chat's kernel (its `df`
+and history). Reopening a chat from the sidebar sent no `dataset_id` and no CSV,
+so its follow-ups ran in whichever kernel was used last. In a headless Electron
+run with chats A (a.csv), B (no file) and C (c.csv), A's follow-up went to C's
+session and data. The frontend now keeps an in-memory map from chat to
+{dataset id, small-CSV fallback, agent session}, restores it when a chat is
+opened, and starts new chats and project pages with no session. `dataforge_db`
+is unchanged. The backend's dataset store is in memory too, so persisting the
+ids across restarts wouldn't help.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

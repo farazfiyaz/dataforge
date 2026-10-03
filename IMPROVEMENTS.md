@@ -317,6 +317,14 @@ executes inside `matplotlib.rc_context()`. A style still applies to the charts
 of the run that sets it, and is restored afterwards, including after errors and
 timeouts. Trade-off: a style set in one agent step no longer carries over to the
 next step of the same session.
+### 2026-10-02 — Auto Analyze: no ID charts, and charts for True/False columns
+Auto Analyze's "Top Values" charts used the first six text columns as they came.
+A text identifier (`order_id` = "A-1001", an email column) became a chart of ten
+bars that are all 1 high, and it used up one of the six slots. Numeric IDs were
+already skipped. True/False columns, often the outcome itself (`churned`), got no
+chart at all, since they count as neither text nor numeric. Now ID columns and
+all-unique columns are skipped, bool columns are charted, charts follow the
+file's column order, and the six-chart cap counts only charts that are drawn.
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`

@@ -156,12 +156,18 @@ def plot_correlation(df: pd.DataFrame) -> dict | None:
 
 
 def plot_categoricals(df: pd.DataFrame) -> list[dict]:
-    """Bar charts for top categorical columns."""
-    cat_cols = text_columns(df, include_category=True)[:6]
+    """Bar charts for top categorical columns, True/False flags included."""
+    kinds = set(text_columns(df, include_category=True)) | set(df.select_dtypes(include=["bool", "boolean"]).columns)
+    cat_cols = [c for c in df.columns if c in kinds]
     results = []
     for col in cat_cols:
+        if len(results) == 6:
+            break
+        # order_id / email-style columns: every bar would be a count of 1
+        if is_id_column(df[col], col):
+            continue
         vc = df[col].value_counts().head(10)
-        if len(vc) < 2:
+        if len(vc) < 2 or vc.iloc[0] == 1:
             continue
         fig, ax = plt.subplots(figsize=(7, 3.5))
         _style(fig, ax)

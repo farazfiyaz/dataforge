@@ -176,12 +176,23 @@ which plan was higher. Box plots (seaborn, pandas `df.boxplot(by=...)`,
 middle 50%, whiskers and that box's outliers, named by category. Seaborn `hue`
 boxes are named "category / hue" from the legend. Single boxes also get their
 median. On the demo data every median and quartile matches pandas exactly.
+### 2026-09-28 — European CSVs: dates stay dates, not huge integers
+Semicolon files with decimal commas are read with `thousands="."`, and pandas
+then drops every dot, so German-Excel-style dates silently became numbers
+(`01.02.2024` → `1022024`, `15.03.2024` → `15032024`) and codes like `1.10`
+became `110`. The agent would happily average them. The loader now keeps a
+parsed column only if every value is a well-formed European number (dots only
+between groups of three digits); other columns keep their original text.
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a
   hard memory limit and stopping long C-level operations).
-- A bare `except:` in generated code can still catch the timeout.
+- A bare `except:` in generated code can still catch the timeout. (Probed 2026-09-28:
+  `while True: try/except: pass` still stops, because the tracer re-raises inside the handler.)
+- `dd.mm.yyyy` text dates from European files could be parsed with `dayfirst=True`;
+  `find_date_column` currently parses them month-first.
+- Ragged CSV rows (one line with an extra field) fail the whole upload with a C tokenizer error.
 - `/api/upload` reads the whole file into memory with no size limit.
 - Recommendations could offer "one-click run" instead of just filling the input.
 - Box plots with several boxes are summarised as one combined span; per-box medians/quartiles would be better.

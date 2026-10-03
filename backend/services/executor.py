@@ -25,7 +25,7 @@ pd.set_option("display.max_columns", 40)
 import matplotlib.pyplot as plt
 from typing import Any
 
-from services import codeguard, outputs
+from services import codeguard
 from services.chartsummary import describe_figure
 from services.datastore import get_dataset
 from services.eda import table_records
@@ -214,10 +214,8 @@ def run_code(
             result["stdout"] = stdout_capture.getvalue()
 
             # A DataFrame the code ended on is what the user asked to see
-            made_table = None      # a table this run produced (worth saving to disk)
             if isinstance(last_value, pd.DataFrame):
                 result["table"] = table_records(last_value, 100)
-                made_table = last_value
 
             # Otherwise prefer a DataFrame assigned in THIS run; fall back to any DataFrame
             new_keys = [k for k in local_ns.keys() if k not in keys_before]
@@ -226,14 +224,12 @@ def run_code(
                 val = local_ns[key]
                 if isinstance(val, pd.DataFrame):
                     result["table"] = table_records(val, 100)
-                    if key in new_keys:
-                        made_table = val
                     break
 
             # Encode EVERY figure the code drew, not just the last one — code that
             # plots more than once per run (e.g. train_model's diagnostics figure
             # followed by an extra chart) used to lose all but the final figure.
-            charts, summaries, titles = [], [], []
+            charts, summaries = [], []
             for num in plt.get_fignums():
                 fig = plt.figure(num)
                 if not fig.get_axes():
@@ -242,7 +238,6 @@ def run_code(
                 fig.savefig(buf, format="png", bbox_inches="tight")
                 buf.seek(0)
                 charts.append(base64.b64encode(buf.read()).decode())
-                titles.append(next((ax.get_title() for ax in fig.get_axes() if ax.get_title()), "") or "chart")
                 try:
                     summaries.append(describe_figure(fig))   # after savefig: tick labels exist now
                 except Exception:
@@ -254,11 +249,6 @@ def run_code(
                 result["chart_summaries"] = summaries
                 result["chart"] = charts[0]   # back-compat: first chart for older consumers
 
-            # Keep a copy of what was made in Documents/DataForge (never fails the run)
-            saved = [outputs.save_png(c, t) for c, t in zip(charts, titles)]
-            if made_table is not None:
-                saved.append(outputs.save_csv(made_table.head(MAX_SAVED_ROWS), "table"))
-            result["saved"] = [s for s in saved if s]
 
     except codeguard.SandboxViolation as e:
         result["error"] = f"SandboxViolation: {e}"
@@ -279,7 +269,6 @@ def run_code(
 
 
 MAX_ECHO_CHARS = 4000
-MAX_SAVED_ROWS = 100_000   # a result table saved to disk is capped at this many rows
 
 
 class _BareExceptToException(ast.NodeTransformer):

@@ -20,7 +20,7 @@ Copyright © 2026 Mohammed Farazuddin · [farazfiyaz2@gmail.com](mailto:farazfiy
 
 **📂 Real-world files** — CSVs saved by Excel on Windows (cp1252), semicolon-separated files with decimal commas (European Excel exports), tab-separated files, `.xlsx` and `.xls` all load correctly.
 
-**💾 Everything is saved** — every chart can be downloaded as PNG and every table as CSV, and DataForge also keeps a copy of each chart, result table and cleaned file in `Documents\DataForge\<date>\`. Delete anything you don't need; DataForge doesn't mind.
+**💾 Downloads** — every chart can be downloaded as PNG and every table as CSV. DataForge writes nothing to disk on its own: what you keep is what you download.
 
 **🗄️ Big-data aware** — datasets are parsed once and stored server-side (referenced by id, never re-uploaded per message), and the agent is trained to sample before plotting and never dump full DataFrames.
 

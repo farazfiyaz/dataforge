@@ -452,7 +452,7 @@ button { cursor: pointer; }
 /* Tables */
 .inline-table-wrap { overflow-x: auto; margin: 10px 0; max-height: 440px; overflow-y: auto; }
 .inline-table { border-collapse: collapse; font-size: 13px; min-width: 100%; }
-/* Download buttons and "saved to" notes under charts and tables */
+/* Download buttons under charts and tables */
 .out-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 12px; }
 .dl-btn {
   display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px;
@@ -461,8 +461,6 @@ button { cursor: pointer; }
 }
 .dl-btn:hover { border-color: var(--field-text); color: var(--field-text); background: var(--field-tint); }
 .dl-btn .ic { font-size: 12px; }
-.saved-note { font-size: 12px; color: var(--ink-3); margin: 2px 0 10px; }
-.saved-note .link-btn { background: none; border: 0; padding: 0; font-size: 12px; color: var(--field-text); text-decoration: underline; }
 .inline-table th {
   position: sticky; top: 0; background: var(--paper);
   text-align: left; font-weight: 600; white-space: nowrap;
@@ -1850,7 +1848,6 @@ function renderAutoAnalyzeResult(turn, data) {
       turn.appendChild(fig);
     });
   }
-  if (data.saved?.length) turn.appendChild(savedNote(data.saved));
 
   scrollBottom();
 }
@@ -1937,7 +1934,7 @@ async function runCode(code, csvRaw, datasetId = "") {
 
 const NUMERIC_RE = /^-?[\d,]*\.?\d+(e[-+]?\d+)?%?$/i;
 
-// ── Downloads, saved-file notes, tables ──
+// ── Downloads, tables ──
 function downloadHref(filename, href) {
   const a = document.createElement("a");
   a.href = href; a.download = filename;
@@ -1975,16 +1972,6 @@ function tableDownload(keys, rows, name) {
     downloadHref(`${name}.csv`, url);
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   }));
-}
-// "Saved to Documents\DataForge: …  Open folder". The files are the user's to
-// delete; opening the folder recreates it if it's gone.
-function savedNote(saved) {
-  const note = document.createElement("div");
-  note.className = "saved-note";
-  note.innerHTML = `Saved to Documents\\DataForge: ${saved.map(escHtml).join(", ")} · <button class="link-btn">Open folder</button>`;
-  note.querySelector("button").addEventListener("click", () =>
-    fetch(`${API}/outputs/open`, { method: "POST" }).catch(() => {}));
-  return note;
 }
 function buildTable(keys, rows) {
   const isNum = v => typeof v === "number" || (typeof v === "string" && NUMERIC_RE.test(v.trim()));
@@ -2053,7 +2040,6 @@ function renderExecutionResult(turn, data) {
   if (!charts.length && !data.table?.length && !data.stdout) {
     appendText(turn, "The code ran and printed nothing.");
   }
-  if (data.saved?.length) turn.appendChild(savedNote(data.saved));
   scrollBottom();
 }
 

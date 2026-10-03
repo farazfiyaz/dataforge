@@ -550,7 +550,6 @@ async def agent(req: AgentRequest):
                     "table": result.get("table"),
                     "charts": result.get("charts"),
                     "error": result.get("error"),
-                    "saved": result.get("saved"),
                     "retrying": bool(result.get("error")),
                 })
 

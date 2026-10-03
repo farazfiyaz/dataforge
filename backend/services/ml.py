@@ -47,6 +47,30 @@ _MODELS = {
     ("regression", "linear"):     lambda: LinearRegression(),
 }
 
+# Names models write instead of the short keys ("random_forest", "xgboost"…)
+_MODEL_ALIASES = {
+    "rf": "rf", "randomforest": "rf", "random_forest": "rf", "forest": "rf",
+    "gb": "gb", "gbm": "gb", "gradientboosting": "gb", "gradient_boosting": "gb",
+    "boosting": "gb", "xgb": "gb", "xgboost": "gb", "lightgbm": "gb", "lgbm": "gb",
+    "linear": "linear", "lr": "linear", "logistic": "linear",
+    "logistic_regression": "linear", "logisticregression": "linear",
+    "linear_regression": "linear", "linearregression": "linear",
+}
+_TASK_ALIASES = {
+    "classification": "classification", "classifier": "classification",
+    "classify": "classification", "binary": "classification",
+    "multiclass": "classification",
+    "regression": "regression", "regressor": "regression", "regress": "regression",
+}
+
+
+def _normalize(value, aliases: dict, kind: str) -> str:
+    key = str(value).strip().lower().replace("-", "_").replace(" ", "_")
+    if key not in aliases:
+        allowed = sorted(set(aliases.values()))
+        raise ValueError(f"unknown {kind} {value!r} — use one of {allowed}")
+    return aliases[key]
+
 
 def train_model(df: pd.DataFrame, target: str, task: str = None,
                 model: str = "rf", features: list = None, test_size: float = 0.2):
@@ -61,6 +85,18 @@ def train_model(df: pd.DataFrame, target: str, task: str = None,
     """
     if target not in df.columns:
         raise ValueError(f"target '{target}' not in columns: {list(df.columns)}")
+    model = _normalize(model, _MODEL_ALIASES, "model")
+    if task is not None:
+        task = _normalize(task, _TASK_ALIASES, "task")
+    if features is not None:
+        features = [features] if isinstance(features, str) else list(features)
+        missing = [c for c in features if c not in df.columns]
+        if missing:
+            raise ValueError(f"features not in columns: {missing} — columns are {list(df.columns)}")
+        # the target as its own feature gives a perfect, meaningless score
+        features = [c for c in features if c != target]
+        if not features:
+            raise ValueError("features must name at least one column other than the target")
 
     data = df.dropna(subset=[target]).copy()
     y = data[target]

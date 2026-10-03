@@ -127,6 +127,17 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-10-03 — train_model accepts the argument names models actually write
+`train_model(df, "churn", features=["a", "churn"])` trained on the target itself
+and reported Accuracy/ROC AUC 1.000, a fake perfect score. `model="random_forest"`
+or `task="Classification"` crashed with a bare `KeyError: ('classification',
+'random_forest')`, and a misspelt feature with `KeyError "['zzz'] not in index"`.
+Now common model and task names are mapped to the short keys ("xgboost" → `gb`,
+"logistic" → `linear`, case-insensitive), the target is dropped from `features`,
+a single feature can be passed as a string, and unknown names raise a
+`ValueError` that lists the valid options or columns, so the agent can fix its
+next step.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

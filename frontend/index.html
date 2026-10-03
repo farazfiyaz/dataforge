@@ -817,6 +817,15 @@ let state = {
   abort: null,      // AbortController of the request in progress (Stop button)
 };
 
+// Per-chat links to server-side state: { datasetId, csvRaw, agentSessionId }.
+// Kept in memory only, like the backend's dataset store, so dataforge_db is
+// unchanged. Without it, reopening a chat lost its dataset and a new chat
+// kept talking to the previous chat's agent kernel (its df and history).
+const liveChats = new Map();
+function rememberLive(chatId, patch) {
+  if (chatId) liveChats.set(chatId, { ...liveChats.get(chatId), ...patch });
+}
+
 // ── DOM ──
 const welcome      = document.getElementById("welcome");
 const conversation = document.getElementById("conversation");
@@ -961,6 +970,7 @@ function openProject(projectId) {
   state.chatId = null;
   state.messages = [];
   state.file = null;
+  state.agentSessionId = null;
   attachedFile.classList.remove("visible");
   renderProjectView();
   showView("project");
@@ -1030,8 +1040,10 @@ function loadChat(projectId, chatId) {
 
   state.projectId = projectId;
   state.chatId    = chatId;
+  const live = liveChats.get(chatId) || {};
   state.messages  = chat.messages || [];
-  state.file      = chat.file || null;
+  state.file      = chat.file ? { ...chat.file, datasetId: live.datasetId, csvRaw: live.csvRaw } : null;
+  state.agentSessionId = live.agentSessionId || null;
 
   conversation.innerHTML = "";
   showView("chat");
@@ -1064,6 +1076,8 @@ function saveCurrentChat() {
   if (!chat) return;
   chat.messages = state.messages;
   chat.file = state.file ? { name: state.file.name, profile: state.file.profile } : null;
+  rememberLive(chat.id, { datasetId: state.file?.datasetId, csvRaw: smallCsvFallback(state.file) || undefined,
+                          agentSessionId: state.agentSessionId });
   chat.updatedAt = Date.now();
   saveDB();
   renderSidebar();
@@ -1078,6 +1092,7 @@ function startNewChat(projectId = db.projects[0].id) {
   state.messages = [];
   state.file     = null;
   stopRun();
+  state.agentSessionId = null;   // a new chat gets its own agent kernel
   state.streaming = false;
 
   attachedFile.classList.remove("visible");
@@ -1427,6 +1442,7 @@ document.getElementById("workspace-btn").addEventListener("click", async () => {
 
 // ── Agent mode: SSE loop with live steps ──
 async function sendAgent(text, fileRef) {
+  const chatId = state.chatId;
   const turn = addAssistantTurn();
   showTyping(turn, "Planning");
   state.streaming = true;
@@ -1469,7 +1485,8 @@ async function sendAgent(text, fileRef) {
         hideTyping(turn);
 
         if (ev === "start") {
-          state.agentSessionId = data.session_id;
+          rememberLive(chatId, { agentSessionId: data.session_id });
+          if (state.chatId === chatId) state.agentSessionId = data.session_id;
           showTyping(turn, "Planning");
         } else if (ev === "code") {
           currentStep = addAgentStep(turn, data.step, data.code);

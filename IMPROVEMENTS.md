@@ -248,6 +248,14 @@ the model wrote `(s == 'True').mean()`, got 0.0 for every group, and answered
 `empty (all N values missing)` instead of `numeric (float64), range nan to nan`.
 Live: "What percentage of customers are active, per plan?" went from 0%/0% to
 32.63%/37.63%, matching pandas exactly.
+### 2026-09-30 — Clear error for files with headers but no rows
+A CSV or Excel file with only a header row (an export whose filter matched
+nothing, or an empty template) made upload and Auto Analyze answer a bare 500.
+The profile's null percentages were `0/0 = NaN`, which isn't valid JSON, and
+the browser then failed to parse the error body. `read_table` now rejects it
+with a 400: "The file has column headers (3) but no data rows." A workbook with
+a blank sheet says "The file is empty." The agent's workspace `load_file` gets
+the same message.
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`

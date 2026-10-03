@@ -107,6 +107,39 @@ def test_upload_endpoint_rejects_empty_file_with_400(client):
     assert "empty" in res.json()["detail"]
 
 
+@pytest.mark.parametrize("data", [b"a,b,c\n", b"a,b,c", b"a;b;c\r\n\r\n"])
+def test_header_only_csv_is_a_clear_error(data):
+    with pytest.raises(ValueError, match=r"column headers \(3\) but no data rows"):
+        read_table(data, "filtered.csv")
+
+
+def test_header_only_and_blank_excel_are_clear_errors():
+    buf = io.BytesIO()
+    pd.DataFrame(columns=["a", "b"]).to_excel(buf, index=False)
+    with pytest.raises(ValueError, match="no data rows"):
+        read_table(buf.getvalue(), "template.xlsx")
+    buf = io.BytesIO()
+    pd.DataFrame().to_excel(buf, index=False)
+    with pytest.raises(ValueError, match="empty"):
+        read_table(buf.getvalue(), "blank.xlsx")
+
+
+@pytest.mark.parametrize("endpoint", ["/api/upload/", "/api/autoanalyze/"])
+def test_endpoints_reject_header_only_file_with_400(client, endpoint):
+    # used to be a 500: the profile's null percentages were NaN, not valid JSON
+    res = client.post(endpoint, files={"file": ("h.csv", io.BytesIO(b"id,churn\n"), "text/csv")},
+                      headers={"Origin": APP_ORIGIN})
+    assert res.status_code == 400
+    assert "no data rows" in res.json()["detail"]
+
+
+def test_workspace_load_file_header_only(tmp_path):
+    (tmp_path / "h.csv").write_bytes(b"a,b\n")
+    workspace.set_workspace(str(tmp_path))
+    with pytest.raises(ValueError, match="no data rows"):
+        workspace.load_file("h.csv")
+
+
 def test_workspace_load_file_uses_sniffing(tmp_path):
     (tmp_path / "eu.csv").write_bytes("a;b\n1,5;2\n".encode("cp1252"))
     workspace.set_workspace(str(tmp_path))

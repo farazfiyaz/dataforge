@@ -21,6 +21,7 @@ import uuid
 from collections import OrderedDict
 from typing import Optional
 
+import numpy as np
 import pandas as pd
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
@@ -255,7 +256,17 @@ def _schema(dataset_id: Optional[str]) -> Optional[str]:
     for col in df.columns[:60]:
         s = df[col]
         nulls = f", {int(s.isna().sum()):,} missing" if s.isna().any() else ""
-        if pd.api.types.is_numeric_dtype(s) and not pd.api.types.is_bool_dtype(s):
+        present = s.dropna()
+        if present.empty:
+            # read_csv makes a blank column float64; "numeric, range nan to nan" invites math on it
+            lines.append(f"- {col}: empty (all {len(s):,} values missing)")
+        elif pd.api.types.is_bool_dtype(s) or (
+                s.dtype == object and present.map(lambda v: isinstance(v, (bool, np.bool_))).all()):
+            # True/False cells are real booleans (object dtype when some are blank), not
+            # the text 'True': df[col] == 'True' is always False, df[col].mean() is the rate
+            lines.append(f"- {col}: boolean True/False, {int(present.astype(bool).sum()):,} True "
+                         f"(rate: df['{col}'].mean(), per group: df.groupby(...)['{col}'].mean()){nulls}")
+        elif pd.api.types.is_numeric_dtype(s):
             lines.append(f"- {col}: numeric ({s.dtype}), range {s.min():g} to {s.max():g}{nulls}")
         elif pd.api.types.is_datetime64_any_dtype(s):
             lines.append(f"- {col}: datetime, {s.min()} to {s.max()}{nulls}")

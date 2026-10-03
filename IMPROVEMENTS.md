@@ -239,6 +239,15 @@ draw histograms over a range reaching `inf`. The same went for code results:
 can't parse. Tables and samples now show `"inf"` / `"-inf"` as text
 (`eda.table_records`), and Auto Analyze's histograms, box plots and heatmap
 leave infinite values out. The data itself is unchanged.
+### 2026-09-30 — Tell the agent True/False columns are booleans, not text
+The schema described a True/False column as `text, 2 values: 'False', 'True'`.
+Those cells are real booleans (dtype `bool`, or `object` when some are blank), so
+the model wrote `(s == 'True').mean()`, got 0.0 for every group, and answered
+"there are no active customers". Boolean columns are now described as
+`boolean True/False, N True` with a `.mean()` hint, and all-blank columns as
+`empty (all N values missing)` instead of `numeric (float64), range nan to nan`.
+Live: "What percentage of customers are active, per plan?" went from 0%/0% to
+32.63%/37.63%, matching pandas exactly.
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`

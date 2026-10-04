@@ -33,5 +33,8 @@ async def upload_file(file: UploadFile = File(...)):
     put_dataset(dataset_id, df)
 
     profile = run_eda(df)
+    # rows the loader dropped for having more fields than the header
+    if df.attrs.get("skipped_lines"):
+        profile["skipped_lines"] = df.attrs["skipped_lines"]
     profile["recommendations"] = recommend(df)
     return {"filename": file.filename, "profile": profile, "dataset_id": dataset_id}

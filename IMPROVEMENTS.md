@@ -374,6 +374,15 @@ Now common model and task names are mapped to the short keys ("xgboost" → `gb`
 a single feature can be passed as a string, and unknown names raise a
 `ValueError` that lists the valid options or columns, so the agent can fix its
 next step.
+### 2026-10-05 — Survive a ragged CSV row
+A single row with an extra field (a stray comma, an unquoted separator) failed
+the whole upload with "C error: Expected 3 fields in line 3, saw 4". Worse, in a
+`;` or tab file it first made the delimiter sniffer pick `,`, so every column
+collapsed into one. Delimiter detection now prefers the separator that splits
+the header and most rows into the same number of fields, and rows with too many
+fields are dropped and listed in `df.attrs["skipped_lines"]`. `/api/upload` and
+`/api/autoanalyze` return them as `profile.skipped_lines`, and the profile says
+"Skipped 1 row with more values than the header (line 3)".
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`

@@ -21,9 +21,12 @@ from services.eda import find_date_column, is_id_column
 # Column names that usually mean "this is what you'd want to predict"
 _TARGET_HINTS = re.compile(
     r"(^|_)(churn(ed)?|target|label|class|outcome|default(ed)?|fraud|survived|"
-    r"converted|conversion|attrition|response|y)$|^(is|has)_",
+    r"converted|conversion|attrition|response|y)$",
     re.IGNORECASE,
 )
+# Flag-style names: sometimes the outcome (is_fraud), just as often a feature
+# (has_cr_card, is_active_member), so they only count when nothing better exists
+_FLAG_HINTS = re.compile(r"^(is|has)_", re.IGNORECASE)
 _YES_NO = {"0", "1", "0.0", "1.0", "yes", "no", "y", "n", "true", "false", "t", "f"}
 
 MISSING_PCT_THRESHOLD = 5.0      # flag columns with more missing values than this
@@ -168,14 +171,18 @@ def _names(cols: list) -> str:
 
 def _find_target(df: pd.DataFrame, exclude: list) -> str | None:
     candidates = [c for c in df.columns if c not in exclude and 2 <= df[c].nunique() <= 10]
-    for c in candidates:              # a name that says "target" wins
-        if _TARGET_HINTS.search(str(c)):
-            return c
+    # Outcome columns tend to come last, so the last match of each kind wins
+    named = [c for c in candidates if _TARGET_HINTS.search(str(c))]
+    if named:                         # a name that says "target" wins
+        return named[-1]
     # Otherwise only a yes/no-style column — a two-valued column like
     # `region` (N/S) is a grouping, not something you'd predict
     binary = [c for c in candidates
               if df[c].nunique() == 2 and {str(v).strip().lower() for v in df[c].dropna().unique()} <= _YES_NO]
-    return binary[-1] if binary else None   # outcome columns tend to come last
+    if binary:
+        return binary[-1]
+    flags = [c for c in candidates if _FLAG_HINTS.search(str(c))]
+    return flags[-1] if flags else None
 
 
 def _strongest_correlation(df: pd.DataFrame, numeric: list) -> tuple[str, str, float] | None:

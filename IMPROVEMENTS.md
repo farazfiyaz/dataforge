@@ -127,6 +127,14 @@ as the final answer. Now:
 - one prompt line explains yes/no rates.
 Live rerun: both turns correct (57.7/44.2/41.4%), and turn 2 sorted horizontally as asked.
 
+### 2026-10-04 — "Predict …" picks the outcome, not the first is_/has_ flag
+The target hint matched any `is_`/`has_` prefix and the first match won, so a
+bank-churn table (`has_cr_card`, `is_active_member`, …, `churned`) was offered
+"Predict has_cr_card", plus "Compare has_cr_card across churned". Flag-style
+names are now only a last resort: an outcome-like name (`churned`, `fraud`, …)
+wins first, then the last yes/no column, then the last `is_`/`has_` column. Among
+outcome names the last one wins too, since outcome columns tend to come last.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a

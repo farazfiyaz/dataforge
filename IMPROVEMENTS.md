@@ -374,6 +374,16 @@ Now common model and task names are mapped to the short keys ("xgboost" → `gb`
 a single feature can be passed as a string, and unknown names raise a
 `ValueError` that lists the valid options or columns, so the agent can fix its
 next step.
+### 2026-10-04 — Line charts say when the peak and low happened
+A trend chart was described as `line 'sales': 6 points, y from 10 to 12 (min 10,
+max 80)`, so the agent knew the peak value but not *when* it happened, and couldn't
+answer "which month had the most sales?" from its own chart. Scatter plots over
+dates showed raw day numbers (`x 1.972e+04–1.988e+04`). Lines now report their x
+range and where the min and max are, with x shown the way the axis shows it:
+`x 2024-01 to 2024-06 … (min 10 at 2024-01, max 80 at 2024-03)`. This covers pandas
+time series (periods), matplotlib/seaborn datetimes, timestamps with times,
+category labels and plain numbers, and stays aligned when values are missing.
+Scatter x ranges over dates are shown as dates.
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`

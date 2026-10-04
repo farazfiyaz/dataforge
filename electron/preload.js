@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld("dataforge", {
     ipcRenderer.on("df:model-status", (_event, status) => callback(status));
   },
 
-  // Future: add IPC calls here as the app grows
-  // e.g. openFilePicker: () => ipcRenderer.invoke("open-file-picker"),
+  // Native "choose folder" dialog for the Workspace button. Resolves to the
+  // chosen path, or null if the user cancels.
+  pickFolder: (defaultPath) => ipcRenderer.invoke("df:pick-folder", defaultPath),
 });

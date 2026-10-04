@@ -177,6 +177,34 @@ button { cursor: pointer; }
 .field-hint { font-weight: 400; color: var(--ink-3); }
 .modal input:focus { outline: 2px solid var(--field-text); outline-offset: -1px; }
 .modal-actions { display: flex; gap: 8px; margin-top: 24px; justify-content: flex-end; }
+/* Model settings */
+.modal.wide { width: min(520px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; }
+.modal select {
+  width: 100%; height: 42px; padding: 0 10px;
+  background: var(--paper); border: 1px solid var(--rule-strong); border-radius: 0; font-size: 15px;
+}
+.modal select:focus { outline: 2px solid var(--field-text); outline-offset: -1px; }
+.provider-choice { border: 0; border-top: 1px solid var(--rule-strong); margin-bottom: 20px; }
+.provider-choice legend { padding: 12px 0 0; }
+.choice { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--rule); cursor: pointer; }
+.choice input { width: auto; height: auto; margin-top: 4px; accent-color: var(--field); }
+.choice strong { font-weight: 600; }
+.choice .field-hint { display: block; font-size: 13px; margin-top: 1px; }
+.field-note { margin-top: 6px; font-size: 13px; color: var(--ink-3); }
+.field-note code { font-family: var(--mono); font-size: 12px; }
+.cloud-warning { margin-bottom: 16px; padding: 10px 12px; border-left: 3px solid var(--field); background: var(--field-tint); font-size: 13px; color: var(--ink-2); }
+.input-hint.cloud { color: var(--field-text); }
+.toggle-row { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--rule); cursor: pointer; }
+.toggle-row input { width: auto; height: auto; margin-top: 4px; accent-color: var(--field); }
+.toggle-row strong { font-weight: 600; }
+.toggle-row .field-hint { display: block; font-size: 13px; margin-top: 1px; }
+/* Web searches and sources shown with an answer */
+.web-note { margin: 8px 0 10px; font-size: 13px; color: var(--ink-2); }
+.web-note .web-label { font-weight: 600; }
+.web-note ul { margin: 4px 0 0; padding-left: 18px; }
+.web-note li { margin: 2px 0; }
+.web-note a { color: var(--field-text); }
+.web-note .muted { color: var(--ink-3); }
 
 /* ── Buttons ── */
 .btn {
@@ -424,6 +452,15 @@ button { cursor: pointer; }
 /* Tables */
 .inline-table-wrap { overflow-x: auto; margin: 10px 0; max-height: 440px; overflow-y: auto; }
 .inline-table { border-collapse: collapse; font-size: 13px; min-width: 100%; }
+/* Download buttons under charts and tables */
+.out-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 12px; }
+.dl-btn {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px;
+  background: none; border: 1px solid var(--rule); font-size: 12px; color: var(--ink-2);
+  transition: border-color .12s, color .12s, background .12s;
+}
+.dl-btn:hover { border-color: var(--field-text); color: var(--field-text); background: var(--field-tint); }
+.dl-btn .ic { font-size: 12px; }
 .inline-table th {
   position: sticky; top: 0; background: var(--paper);
   text-align: left; font-weight: 600; white-space: nowrap;
@@ -494,6 +531,11 @@ button { cursor: pointer; }
 #send-btn:not(:disabled):hover { background: var(--ink); color: var(--paper); }
 #send-btn:not(:disabled):active { transform: translateY(1px); }
 #send-btn:disabled { opacity: .3; cursor: default; }
+/* While a reply is being worked on, the send button becomes Stop */
+#send-btn.stop { background: var(--ink); color: var(--paper); font-size: 15px; }
+#send-btn.stop:hover { background: var(--danger); color: var(--paper); }
+.needs-file-row { margin-top: 12px; }
+.msg-body.stopped { color: var(--ink-3); }
 .input-hint { font-size: 12px; color: var(--ink-3); margin-top: 8px; }
 
 /* Scrollbars */
@@ -565,7 +607,9 @@ button { cursor: pointer; }
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
   <symbol id="i-plus" viewBox="0 0 256 256"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></symbol>
   <symbol id="i-paperclip" viewBox="0 0 256 256"><path d="M209.66,122.34a8,8,0,0,1,0,11.32l-82.05,82a56,56,0,0,1-79.2-79.21L147.67,35.73a40,40,0,1,1,56.61,56.55L105,193A24,24,0,1,1,71,159L154.3,74.38A8,8,0,1,1,165.7,85.6L82.39,170.31a8,8,0,1,0,11.27,11.36L192.93,81A24,24,0,1,0,159,47L59.76,147.68a40,40,0,1,0,56.53,56.62l82.06-82A8,8,0,0,1,209.66,122.34Z"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 256 256"><path d="M152,96H104a8,8,0,0,0-8,8v48a8,8,0,0,0,8,8h48a8,8,0,0,0,8-8V104A8,8,0,0,0,152,96Zm-8,48H112V112h32Zm88,0H216V112h16a8,8,0,0,0,0-16H216V56a16,16,0,0,0-16-16H160V24a8,8,0,0,0-16,0V40H112V24a8,8,0,0,0-16,0V40H56A16,16,0,0,0,40,56V96H24a8,8,0,0,0,0,16H40v32H24a8,8,0,0,0,0,16H40v40a16,16,0,0,0,16,16H96v16a8,8,0,0,0,16,0V216h32v16a8,8,0,0,0,16,0V216h40a16,16,0,0,0,16-16V160h16a8,8,0,0,0,0-16Zm-32,56H56V56H200Z"/></symbol>
   <symbol id="i-folder-open" viewBox="0 0 256 256"><path d="M245,110.64A16,16,0,0,0,232,104H216V88a16,16,0,0,0-16-16H130.67L102.94,51.2a16.14,16.14,0,0,0-9.6-3.2H40A16,16,0,0,0,24,64V208h0a8,8,0,0,0,8,8H211.1a8,8,0,0,0,7.59-5.47l28.49-85.47A16.05,16.05,0,0,0,245,110.64ZM93.34,64,123.2,86.4A8,8,0,0,0,128,88h72v16H69.77a16,16,0,0,0-15.18,10.94L40,158.7V64Zm112,136H43.1l26.67-80H232Z"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 256 256"><rect x="52" y="52" width="152" height="152" rx="12"/></symbol>
   <symbol id="i-arrow-up" viewBox="0 0 256 256"><path d="M205.66,117.66a8,8,0,0,1-11.32,0L136,59.31V216a8,8,0,0,1-16,0V59.31L61.66,117.66a8,8,0,0,1-11.32-11.32l72-72a8,8,0,0,1,11.32,0l72,72A8,8,0,0,1,205.66,117.66Z"/></symbol>
   <symbol id="i-copy" viewBox="0 0 256 256"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></symbol>
   <symbol id="i-play" viewBox="0 0 256 256"><path d="M232.4,114.49,88.32,26.35a16,16,0,0,0-16.2-.3A15.86,15.86,0,0,0,64,39.87V216.13A15.94,15.94,0,0,0,80,232a16.07,16.07,0,0,0,8.36-2.35L232.4,141.51a15.81,15.81,0,0,0,0-27ZM80,215.94V40l143.83,88Z"/></symbol>
@@ -613,6 +657,46 @@ button { cursor: pointer; }
   </div>
 </div>
 
+<div class="modal-overlay" id="model-modal" style="display:none" role="dialog" aria-modal="true" aria-labelledby="model-modal-title">
+  <div class="modal wide">
+    <h3 id="model-modal-title">Model</h3>
+    <fieldset class="provider-choice">
+      <legend class="field-label">Which AI answers your questions</legend>
+      <label class="choice"><input type="radio" name="provider" value="local" />
+        <span><strong>This computer</strong> (Ollama)<span class="field-hint">Private: your data never leaves your machine. Free, works offline.</span></span></label>
+      <label class="choice"><input type="radio" name="provider" value="claude" />
+        <span><strong>Cloud</strong> (Claude by Anthropic)<span class="field-hint">Much smarter and faster. Needs internet and an API key; billed per use.</span></span></label>
+    </fieldset>
+    <div id="local-fields">
+      <div class="field">
+        <label class="field-label" for="local-model-select">Local model</label>
+        <select id="local-model-select"></select>
+        <p class="field-note" id="local-suggest"></p>
+      </div>
+    </div>
+    <div id="cloud-fields">
+      <p class="cloud-warning" role="note">In cloud mode your questions, the dataset's column names and sample values, and everything the analysis prints (which can include rows of your data) are sent to Anthropic to be answered. The file itself isn't uploaded.</p>
+      <div class="field">
+        <label class="field-label" for="claude-model-select">Claude model</label>
+        <select id="claude-model-select"></select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="claude-key-input">Anthropic API key <span class="field-hint" id="key-hint"></span></label>
+        <input type="password" id="claude-key-input" autocomplete="off" spellcheck="false" placeholder="sk-ant-…" />
+        <p class="field-note">Saved only on this computer. Create one at console.anthropic.com.</p>
+      </div>
+    </div>
+    <label class="toggle-row"><input type="checkbox" id="web-search-toggle" />
+      <span><strong>Search the web</strong> for questions it can't answer from memory
+        <span class="field-hint">Only the search words are sent (to DuckDuckGo on this computer, or Anthropic's search in cloud mode), never your data. Off by default.</span></span></label>
+    <p class="msg-body error-text" id="model-error" role="alert" hidden></p>
+    <div class="modal-actions">
+      <button class="btn quiet" id="model-cancel">Cancel</button>
+      <button class="btn primary" id="model-save">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Main -->
 <main id="main">
 
@@ -629,7 +713,7 @@ button { cursor: pointer; }
   <!-- Empty state -->
   <div id="welcome">
     <div class="welcome-inner">
-      <h1><span>Ask your data anything.</span><span>It never leaves this computer.</span></h1>
+      <h1><span>Ask your data anything.</span><span id="welcome-privacy">It never leaves this computer.</span></h1>
       <p class="lede">Attach a CSV or Excel file and ask in plain language. DataForge writes the Python, runs it, fixes its own errors, and shows you every step.</p>
       <div class="welcome-actions">
         <button class="btn primary" id="welcome-attach"><svg class="ic" aria-hidden="true"><use href="#i-paperclip"/></svg>Attach a dataset</button>
@@ -674,6 +758,7 @@ button { cursor: pointer; }
           <div class="input-left">
             <button class="tool-btn" id="attach-btn" title="Attach a CSV or Excel file"><svg class="ic" aria-hidden="true"><use href="#i-paperclip"/></svg>Attach</button>
             <button class="tool-btn" id="workspace-btn" title="Choose a folder the agent can browse and load files from"><svg class="ic" aria-hidden="true"><use href="#i-folder-open"/></svg>Workspace</button>
+            <button class="tool-btn" id="model-btn" title="Choose which AI model answers"><svg class="ic" aria-hidden="true"><use href="#i-cpu"/></svg><span id="model-btn-label">Model</span></button>
             <input type="file" id="file-input" accept=".csv,.tsv,.txt,.xlsx,.xls" />
             <span class="divider" aria-hidden="true"></span>
             <div class="modes" role="radiogroup" aria-label="Mode">
@@ -692,32 +777,56 @@ button { cursor: pointer; }
 </main>
 
 <script>
-const API = "http://localhost:8000/api";
+const API = "/api";   // same origin: the port changes every launch
 
 // ── Persistence ──
-function loadDB() {
-  try { return JSON.parse(localStorage.getItem("dataforge_db") || "null") || defaultDB(); }
-  catch { return defaultDB(); }
-}
-// `db` is always up to date in memory; only the (expensive, whole-DB) localStorage
-// write is debounced, so rapid-fire saves during a fast conversation don't each
-// re-serialize every project/chat/message on the main thread.
+// Projects and chats are kept by the backend, encrypted on disk
+// (services/history.py). The server inlines them into this page as
+// #df-history, so they're here before anything renders. Older versions kept
+// them in localStorage in plain text: that copy is moved over once, then deleted.
+const LEGACY_DB_KEY = "dataforge_db";
 let _saveTimer = null;
+let _migrating = false;
+function loadDB() {
+  let saved = null;
+  try { saved = JSON.parse(document.getElementById("df-history")?.textContent || "null"); } catch {}
+  if (!saved) {
+    try { saved = JSON.parse(localStorage.getItem(LEGACY_DB_KEY) || "null"); } catch {}
+    _migrating = Boolean(saved);
+  }
+  return saved || defaultDB();
+}
+function putDB() {
+  return fetch(`${API}/history/`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ db }),
+  }).then(res => {
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (_migrating) {
+      _migrating = false;
+      try { localStorage.removeItem(LEGACY_DB_KEY); } catch {}
+    }
+  }).catch(err => console.error("[DataForge] Could not save history:", err));
+}
+// `db` is always up to date in memory; only the (expensive, whole-DB) save is
+// debounced, so rapid-fire saves during a fast conversation don't each
+// re-serialize every project/chat/message.
 function saveDB() {
   clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(() => localStorage.setItem("dataforge_db", JSON.stringify(db)), 400);
+  _saveTimer = setTimeout(putDB, 400);
 }
+// Electron calls this before closing the window and waits for it
 function flushDB() {
   clearTimeout(_saveTimer);
-  localStorage.setItem("dataforge_db", JSON.stringify(db));
+  return putDB();
 }
-window.addEventListener("beforeunload", flushDB);
+window.addEventListener("beforeunload", () => { if (_saveTimer) flushDB(); });
 function defaultDB() {
   return { projects: [{ id: uid(), name: "General", chats: [] }] };
 }
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
 let db = loadDB();
+if (_migrating) flushDB();
 
 // ── Session state ──
 let state = {
@@ -727,7 +836,17 @@ let state = {
   messages: [],     // [{role, parts}]  parts = array of {type, content}
   streaming: false,
   agentSessionId: null,  // persistent agent kernel id (server-side namespace)
+  abort: null,      // AbortController of the request in progress (Stop button)
 };
+
+// Per-chat links to server-side state: { datasetId, csvRaw, agentSessionId }.
+// Kept in memory only, like the backend's dataset store, so dataforge_db is
+// unchanged. Without it, reopening a chat lost its dataset and a new chat
+// kept talking to the previous chat's agent kernel (its df and history).
+const liveChats = new Map();
+function rememberLive(chatId, patch) {
+  if (chatId) liveChats.set(chatId, { ...liveChats.get(chatId), ...patch });
+}
 
 // ── DOM ──
 const welcome      = document.getElementById("welcome");
@@ -873,6 +992,7 @@ function openProject(projectId) {
   state.chatId = null;
   state.messages = [];
   state.file = null;
+  state.agentSessionId = null;
   attachedFile.classList.remove("visible");
   renderProjectView();
   showView("project");
@@ -942,8 +1062,10 @@ function loadChat(projectId, chatId) {
 
   state.projectId = projectId;
   state.chatId    = chatId;
+  const live = liveChats.get(chatId) || {};
   state.messages  = chat.messages || [];
-  state.file      = chat.file || null;
+  state.file      = chat.file ? { ...chat.file, datasetId: live.datasetId, csvRaw: live.csvRaw } : null;
+  state.agentSessionId = live.agentSessionId || null;
 
   conversation.innerHTML = "";
   showView("chat");
@@ -961,6 +1083,7 @@ function replayMessage(msg) {
     const turn = addAssistantTurn();
     renderAssistantContent(turn, msg.text, state.file);
     if (msg.edaProfile) renderEdaResponse(turn, msg.edaProfile, msg.filename);
+    showSources(turn, msg.sources);
     if (msg.recs?.items?.length) renderRecommendations(turn, msg.recs.items, { stuck: msg.recs.stuck });
     return turn;
   }
@@ -975,6 +1098,8 @@ function saveCurrentChat() {
   if (!chat) return;
   chat.messages = state.messages;
   chat.file = state.file ? { name: state.file.name, profile: state.file.profile } : null;
+  rememberLive(chat.id, { datasetId: state.file?.datasetId, csvRaw: smallCsvFallback(state.file) || undefined,
+                          agentSessionId: state.agentSessionId });
   chat.updatedAt = Date.now();
   saveDB();
   renderSidebar();
@@ -988,6 +1113,8 @@ function startNewChat(projectId = db.projects[0].id) {
   state.chatId   = null;
   state.messages = [];
   state.file     = null;
+  stopRun();
+  state.agentSessionId = null;   // a new chat gets its own agent kernel
   state.streaming = false;
 
   attachedFile.classList.remove("visible");
@@ -1066,8 +1193,28 @@ document.getElementById("welcome-attach").addEventListener("click", () => fileIn
 
 // ── Input ──
 function updateSendBtn() {
+  if (state.streaming) {           // while a reply is in progress the button stops it
+    sendBtn.disabled = false;
+    sendBtn.classList.add("stop");
+    sendBtn.title = "Stop (Esc)";
+    sendBtn.setAttribute("aria-label", "Stop");
+    sendBtn.innerHTML = icon("stop");
+    return;
+  }
+  sendBtn.classList.remove("stop");
+  sendBtn.title = "Send (Enter)";
+  sendBtn.setAttribute("aria-label", "Send");
+  sendBtn.innerHTML = icon("arrow-up");
   sendBtn.disabled = msgInput.value.trim() === "" && !state.file;
 }
+
+// Aborting the request makes the backend cancel the run (and Ollama stop generating)
+function stopRun() {
+  state.abort?.abort();
+}
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && state.streaming) stopRun();
+});
 
 msgInput.addEventListener("input", () => {
   msgInput.style.height = "auto";
@@ -1082,7 +1229,7 @@ msgInput.addEventListener("keydown", e => {
     if (!sendBtn.disabled && !state.streaming) submit();
   }
 });
-sendBtn.addEventListener("click", () => { if (!state.streaming) submit(); });
+sendBtn.addEventListener("click", () => { if (state.streaming) stopRun(); else submit(); });
 
 // ── File attach ──
 attachBtn.addEventListener("click", () => fileInput.click());
@@ -1172,7 +1319,78 @@ async function submit() {
     return;
   }
 
-  await sendChat(text, fileRef, modeSelect.value);
+  const mode = modeSelect.value;
+  // With no file, the backend answers general questions and replies
+  // "needs_file" only when the question needs the user's data
+  await sendChat(text, fileRef, mode);
+}
+
+function showNeedsFile(turn, message) {
+  appendText(turn, message);
+  const row = document.createElement("div");
+  row.className = "needs-file-row";
+  const btn = document.createElement("button");
+  btn.className = "btn primary";
+  btn.innerHTML = `${icon("paperclip")}Attach a file`;
+  btn.addEventListener("click", () => fileInput.click());
+  row.appendChild(btn);
+  turn.appendChild(row);
+  state.messages.push({ role: "assistant", text: message });
+  saveCurrentChat();
+  scrollBottom();
+}
+
+function linkList(items) {
+  const ul = document.createElement("ul");
+  items.forEach(r => {
+    const li = document.createElement("li");
+    const a = document.createElement("a");
+    a.href = r.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+    a.textContent = r.title || r.url;
+    li.appendChild(a);
+    ul.appendChild(li);
+  });
+  return ul;
+}
+// "Searched the web for …" with the links it read (local model's web_search tool)
+function showSearch(turn, data) {
+  const note = document.createElement("div");
+  note.className = "web-note";
+  note.innerHTML = `<span class="web-label">Searched the web</span> for “${escHtml(data.query)}”`;
+  if (data.error) {
+    note.insertAdjacentHTML("beforeend", ` <span class="muted">— ${escHtml(data.error)}</span>`);
+  } else if (!data.results?.length) {
+    note.insertAdjacentHTML("beforeend", ` <span class="muted">— no results</span>`);
+  } else {
+    note.appendChild(linkList(data.results));
+  }
+  turn.appendChild(note);
+  scrollBottom();
+}
+// Pages a cloud answer drew on (Claude's web search)
+function showSources(turn, sources) {
+  if (!sources?.length) return;
+  const note = document.createElement("div");
+  note.className = "web-note";
+  note.innerHTML = `<span class="web-label">Sources</span>`;
+  note.appendChild(linkList(sources));
+  turn.appendChild(note);
+}
+
+function showStopped(turn) {
+  // a step that was mid-run when stopped
+  turn.querySelectorAll(".agent-step-label").forEach(label => {
+    if (!label.querySelector(".spin")) return;
+    const n = escHtml(label.closest(".agent-step")?.dataset.step || "");
+    label.innerHTML = `${icon("stop")}<span>Step ${n}</span><span class="state">Stopped</span>`;
+  });
+  const p = document.createElement("div");
+  p.className = "msg-body stopped";
+  p.textContent = "Stopped.";
+  turn.appendChild(p);
+  state.messages.push({ role: "assistant", text: "Stopped." });
+  saveCurrentChat();
+  scrollBottom();
 }
 
 async function sendChat(text, fileRef, mode) {
@@ -1180,15 +1398,23 @@ async function sendChat(text, fileRef, mode) {
   const assistantTurn = addAssistantTurn();
   showTyping(assistantTurn);
   state.streaming = true;
+  state.abort = new AbortController();
+  updateSendBtn();
 
   try {
     const res = await fetch(`${API}/chat/`, {
       method: "POST",
+      signal: state.abort.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: text, context: buildContext(fileRef?.profile), mode }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Chat error");
+    if (data.needs_file) {
+      hideTyping(assistantTurn);
+      showNeedsFile(assistantTurn, data.response);
+      return;
+    }
 
     hideTyping(assistantTurn);
     const full = data.response || "";
@@ -1198,9 +1424,11 @@ async function sendChat(text, fileRef, mode) {
     saveCurrentChat();
   } catch (e) {
     hideTyping(assistantTurn);
-    appendError(assistantTurn, `No answer from the local model: ${e.message}`);
+    if (e.name === "AbortError") showStopped(assistantTurn);
+    else appendError(assistantTurn, `No answer from the model: ${e.message}`);
   } finally {
     state.streaming = false;
+    state.abort = null;
     updateSendBtn();
   }
 }
@@ -1236,13 +1464,17 @@ document.getElementById("workspace-btn").addEventListener("click", async () => {
 
 // ── Agent mode: SSE loop with live steps ──
 async function sendAgent(text, fileRef) {
+  const chatId = state.chatId;
   const turn = addAssistantTurn();
   showTyping(turn, "Planning");
   state.streaming = true;
+  state.abort = new AbortController();
+  updateSendBtn();
 
   try {
     const res = await fetch(`${API}/agent/`, {
       method: "POST",
+      signal: state.abort.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message: text,
@@ -1275,22 +1507,28 @@ async function sendAgent(text, fileRef) {
         hideTyping(turn);
 
         if (ev === "start") {
-          state.agentSessionId = data.session_id;
+          rememberLive(chatId, { agentSessionId: data.session_id });
+          if (state.chatId === chatId) state.agentSessionId = data.session_id;
           showTyping(turn, "Planning");
         } else if (ev === "code") {
           currentStep = addAgentStep(turn, data.step, data.code);
         } else if (ev === "result") {
           finishAgentStep(currentStep, data);
           showTyping(turn, data.error ? "Revising the code" : "Thinking about the next step");
+        } else if (ev === "search") {
+          showSearch(turn, data);
         } else if (ev === "final") {
           renderAssistantContent(turn, data.content || "", fileRef || state.file);
-          state.messages.push({ role: "assistant", text: data.content || "" });
+          showSources(turn, data.sources);
+          state.messages.push({ role: "assistant", text: data.content || "", sources: data.sources || null });
           saveCurrentChat();
         } else if (ev === "recommendations") {
           renderRecommendations(turn, data.items, { stuck: data.stuck });
           // attach to the answer just saved so they come back when the chat is reopened
           const last = state.messages[state.messages.length - 1];
           if (last?.role === "assistant") { last.recs = { items: data.items, stuck: data.stuck }; saveCurrentChat(); }
+        } else if (ev === "needs_file") {
+          showNeedsFile(turn, data.message);
         } else if (ev === "error") {
           appendError(turn, data.message);
         }
@@ -1299,10 +1537,12 @@ async function sendAgent(text, fileRef) {
     }
   } catch (e) {
     hideTyping(turn);
-    appendError(turn, `The agent stopped: ${e.message}`);
+    if (e.name === "AbortError") showStopped(turn);
+    else appendError(turn, `The agent stopped: ${e.message}`);
   } finally {
     hideTyping(turn);
     state.streaming = false;
+    state.abort = null;
     updateSendBtn();
   }
 }
@@ -1340,6 +1580,13 @@ function finishAgentStep(stepEl, data) {
     const details = document.createElement("details");
     details.innerHTML = `<summary>${icon("caret-right")}Error</summary><pre class="code-content wrap">${escHtml(data.error)}</pre>`;
     stepEl.appendChild(details);
+    if (data.stdout) {   // what the code printed before it failed
+      const out = document.createElement("div");
+      out.className = "output";
+      out.innerHTML = `<div class="output-label">Output before the error</div><pre></pre>`;
+      out.querySelector("pre").textContent = data.stdout;
+      stepEl.appendChild(out);
+    }
   } else {
     label.innerHTML = `${icon("check")}<span>Step ${n}</span><span class="state">Done</span>`;
     renderExecutionResult(stepEl, data);
@@ -1415,6 +1662,7 @@ function pct(part, whole) {
 function renderEdaResponse(turn, profile, filename, fileObj) {
   const numeric = profile.columns.filter(c => c.kind === "numeric");
   const categ   = profile.columns.filter(c => c.kind === "categorical");
+  const dates   = profile.columns.filter(c => c.kind === "datetime").length;
   const rows = profile.shape.rows, cols = profile.shape.cols;
   const totalNulls = profile.columns.reduce((a,c) => a + c.null_count, 0);
 
@@ -1427,7 +1675,7 @@ function renderEdaResponse(turn, profile, filename, fileObj) {
   readings.className = "profile";
   readings.innerHTML = `
     <div class="reading"><div class="value">${rows.toLocaleString()}</div><div class="label">Rows</div><div class="ctx">${profile.duplicates.toLocaleString()} duplicated</div></div>
-    <div class="reading"><div class="value">${cols}</div><div class="label">Columns</div><div class="ctx">${numeric.length} numeric, ${categ.length} categorical</div></div>
+    <div class="reading"><div class="value">${cols}</div><div class="label">Columns</div><div class="ctx">${numeric.length} numeric, ${categ.length} categorical${dates ? `, ${dates} date` : ""}</div></div>
     <div class="reading"><div class="value">${totalNulls.toLocaleString()}</div><div class="label">Missing values</div><div class="ctx">${pct(totalNulls, rows * cols)} of all cells</div></div>
     <div class="reading"><div class="value">${profile.duplicates.toLocaleString()}</div><div class="label">Duplicate rows</div><div class="ctx">${pct(profile.duplicates, rows)} of rows</div></div>
   `;
@@ -1620,6 +1868,7 @@ function renderAutoAnalyzeResult(turn, data) {
       img.alt = plot.title || "Chart";
       img.src = "data:image/png;base64," + plot.chart;
       fig.appendChild(img);
+      fig.appendChild(chartDownload(plot.chart, slug(plot.title, "chart")));
       turn.appendChild(fig);
     });
   }
@@ -1631,9 +1880,16 @@ function renderAutoAnalyzeResult(turn, data) {
 function renderAssistantContent(turn, text, fileRef) {
   splitByCodeBlocks(text).forEach(part => {
     if (part.type === "text" && part.content.trim()) {
-      const p = document.createElement("div");
-      p.className = "msg-body"; p.textContent = part.content.trim();
-      turn.appendChild(p);
+      splitMarkdownTables(part.content).forEach(seg => {
+        if (seg.type === "table") {
+          turn.appendChild(buildTable(seg.keys, seg.rows));
+          turn.appendChild(tableDownload(seg.keys, seg.rows, "answer-table"));
+        } else if (seg.content.trim()) {
+          const p = document.createElement("div");
+          p.className = "msg-body"; p.textContent = seg.content.trim();
+          turn.appendChild(p);
+        }
+      });
     } else if (part.type === "code") {
       turn.appendChild(buildCodeBlock(part.lang, part.content, fileRef));
     }
@@ -1701,26 +1957,102 @@ async function runCode(code, csvRaw, datasetId = "") {
 }
 
 const NUMERIC_RE = /^-?[\d,]*\.?\d+(e[-+]?\d+)?%?$/i;
+
+// ── Downloads, tables ──
+function downloadHref(filename, href) {
+  const a = document.createElement("a");
+  a.href = href; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function toCsv(keys, rows) {
+  const cell = v => {
+    const t = v === null || v === undefined ? "" : String(v);
+    return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  return [keys.map(cell).join(","), ...rows.map(r => keys.map(k => cell(r[k])).join(","))].join("\n");
+}
+function slug(text, fallback) {
+  return (text || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50) || fallback;
+}
+function dlButton(label, onClick) {
+  const b = document.createElement("button");
+  b.className = "dl-btn";
+  b.innerHTML = `${icon("download-simple")}${escHtml(label)}`;
+  b.addEventListener("click", onClick);
+  return b;
+}
+function actionsRow(...buttons) {
+  const row = document.createElement("div");
+  row.className = "out-actions";
+  buttons.forEach(b => row.appendChild(b));
+  return row;
+}
+function chartDownload(b64, name) {
+  return actionsRow(dlButton("Download PNG", () => downloadHref(`${name}.png`, "data:image/png;base64," + b64)));
+}
+function tableDownload(keys, rows, name) {
+  return actionsRow(dlButton("Download CSV", () => {
+    const url = URL.createObjectURL(new Blob([toCsv(keys, rows)], { type: "text/csv" }));
+    downloadHref(`${name}.csv`, url);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }));
+}
+function buildTable(keys, rows) {
+  const isNum = v => typeof v === "number" || (typeof v === "string" && NUMERIC_RE.test(v.trim()));
+  const wrap = document.createElement("div");
+  wrap.className = "inline-table-wrap";
+  wrap.innerHTML = `<table class="inline-table">
+    <thead><tr>${keys.map(k => `<th${isNum(rows[0]?.[k]) ? ' class="num"' : ""}>${escHtml(k)}</th>`).join("")}</tr></thead>
+    <tbody>${rows.map(row => `<tr>${keys.map(k => `<td${isNum(row[k]) ? ' class="num"' : ""}>${escHtml(String(row[k] ?? ""))}</td>`).join("")}</tr>`).join("")}</tbody>
+  </table>`;
+  return wrap;
+}
+
+// Markdown tables in an answer (| a | b | / |---|---| / rows) → real tables
+const MD_TABLE_SEP = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/;
+function mdCells(line) {
+  return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(c => c.trim().replace(/\*\*/g, ""));
+}
+function splitMarkdownTables(text) {
+  const lines = text.split("\n"), parts = [];
+  let buf = [];
+  const flush = () => { if (buf.join("").trim()) parts.push({ type: "text", content: buf.join("\n") }); buf = []; };
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim().startsWith("|") && MD_TABLE_SEP.test(lines[i + 1] || "")) {
+      flush();
+      const header = mdCells(lines[i]);
+      const keys = header.map((h, j) => header.indexOf(h) === j ? (h || `col${j + 1}`) : `${h} (${j + 1})`);
+      const rows = [];
+      i += 2;
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        const cells = mdCells(lines[i]);
+        rows.push(Object.fromEntries(keys.map((k, j) => [k, cells[j] ?? ""])));
+        i++;
+      }
+      i--;
+      parts.push({ type: "table", keys, rows });
+    } else {
+      buf.push(lines[i]);
+    }
+  }
+  flush();
+  return parts;
+}
 function renderExecutionResult(turn, data) {
   const charts = data.charts || (data.chart ? [data.chart] : []);
-  charts.forEach(chart => {
+  charts.forEach((chart, i) => {
     const img = document.createElement("img");
     img.className = "inline-chart";
     img.loading = "lazy";
     img.alt = "Chart generated by the code";
     img.src = "data:image/png;base64," + chart;
     turn.appendChild(img);
+    turn.appendChild(chartDownload(chart, `chart-${i + 1}`));
   });
   if (data.table?.length) {
     const keys = Object.keys(data.table[0]);
-    const isNum = v => typeof v === "number" || (typeof v === "string" && NUMERIC_RE.test(v.trim()));
-    const wrap = document.createElement("div");
-    wrap.className = "inline-table-wrap";
-    wrap.innerHTML = `<table class="inline-table">
-      <thead><tr>${keys.map(k=>`<th${isNum(data.table[0][k]) ? ' class="num"' : ""}>${escHtml(k)}</th>`).join("")}</tr></thead>
-      <tbody>${data.table.map(row=>`<tr>${keys.map(k=>`<td${isNum(row[k]) ? ' class="num"' : ""}>${escHtml(String(row[k]))}</td>`).join("")}</tr>`).join("")}</tbody>
-    </table>`;
-    turn.appendChild(wrap);
+    turn.appendChild(buildTable(keys, data.table));
+    turn.appendChild(tableDownload(keys, data.table, "table"));
   }
   if (data.stdout) {
     const out = document.createElement("div");
@@ -1751,6 +2083,121 @@ function scrollBottom() {
     _scrollQueued = false;
   });
 }
+// ── Model settings (local Ollama by default; Claude in the cloud if opted in) ──
+const modelModal = document.getElementById("model-modal");
+const inputHint = document.querySelector(".input-hint");
+const DEFAULT_INPUT_HINT = inputHint.textContent;
+let modelSettings = null;
+let modelReturnFocus = null;
+
+function claudeName(s) {
+  const m = s.claude_models.find(x => x.id === s.claude_model);
+  return m ? m.label.split(" — ")[0] : s.claude_model;
+}
+
+function renderModelStatus() {
+  const label = document.getElementById("model-btn-label");
+  if (modelSettings?.provider === "claude") {
+    label.textContent = "Cloud";
+    inputHint.textContent = `Cloud mode: questions and results are sent to Anthropic (${claudeName(modelSettings)}). Shift + Enter for a new line.`;
+    inputHint.classList.add("cloud");
+    document.getElementById("welcome-privacy").textContent = `Answered by ${claudeName(modelSettings)} in the cloud.`;
+  } else {
+    document.getElementById("welcome-privacy").textContent = "It never leaves this computer.";
+    label.textContent = "Model";
+    inputHint.textContent = modelSettings
+      ? (modelSettings.web_search
+          ? `Runs on this computer (${modelSettings.local_model}); web search is on, so search words go to DuckDuckGo. Shift + Enter for a new line.`
+          : `Everything runs on this computer (${modelSettings.local_model}). Shift + Enter for a new line.`)
+      : DEFAULT_INPUT_HINT;
+    inputHint.classList.remove("cloud");
+  }
+}
+
+async function loadModelSettings() {
+  try {
+    const res = await fetch(`${API}/settings/`);
+    if (res.ok) modelSettings = await res.json();
+  } catch { /* backend not up yet; keep the default hint */ }
+  renderModelStatus();
+}
+
+function showProviderFields() {
+  const cloud = document.querySelector('input[name="provider"]:checked')?.value === "claude";
+  document.getElementById("local-fields").hidden = cloud;
+  document.getElementById("cloud-fields").hidden = !cloud;
+}
+
+async function openModelModal() {
+  await loadModelSettings();
+  const s = modelSettings;
+  if (!s) return;
+  modelReturnFocus = document.activeElement;
+  document.querySelector(`input[name="provider"][value="${s.provider}"]`).checked = true;
+
+  const local = document.getElementById("local-model-select");
+  const names = s.local_models.includes(s.local_model) ? s.local_models : [s.local_model, ...s.local_models];
+  local.innerHTML = names.map(n =>
+    `<option value="${escHtml(n)}">${escHtml(n)}${s.local_models.includes(n) ? "" : " (not downloaded yet)"}</option>`).join("");
+  local.value = s.local_model;
+  document.getElementById("local-suggest").innerHTML = s.suggested_local_models.length
+    ? "For better answers you can download a bigger model: " + s.suggested_local_models.map(m =>
+        `<code>ollama pull ${escHtml(m.name)}</code> (${escHtml(m.note)})`).join(", ") + ". It then appears in this list."
+    : "";
+
+  const cloud = document.getElementById("claude-model-select");
+  cloud.innerHTML = s.claude_models.map(m => `<option value="${escHtml(m.id)}">${escHtml(m.label)}</option>`).join("");
+  cloud.value = s.claude_model;
+  document.getElementById("key-hint").textContent = s.has_api_key
+    ? (s.api_key_from_env ? "(using ANTHROPIC_API_KEY)" : `(saved key ${s.api_key_hint}; leave blank to keep it)`)
+    : "";
+  document.getElementById("claude-key-input").value = "";
+  document.getElementById("web-search-toggle").checked = !!s.web_search;
+  document.getElementById("model-error").hidden = true;
+
+  showProviderFields();
+  modelModal.style.display = "flex";
+  setTimeout(() => document.querySelector('input[name="provider"]:checked').focus(), 50);
+}
+
+function closeModelModal() {
+  modelModal.style.display = "none";
+  modelReturnFocus?.focus?.();
+}
+
+async function saveModelSettings() {
+  const body = {
+    provider: document.querySelector('input[name="provider"]:checked').value,
+    local_model: document.getElementById("local-model-select").value,
+    claude_model: document.getElementById("claude-model-select").value,
+    web_search: document.getElementById("web-search-toggle").checked,
+  };
+  const key = document.getElementById("claude-key-input").value.trim();
+  if (key) body.claude_api_key = key;
+  const err = document.getElementById("model-error");
+  try {
+    const res = await fetch(`${API}/settings/`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Couldn't save the settings.");
+    modelSettings = data;
+    renderModelStatus();
+    closeModelModal();
+  } catch (e) {
+    err.textContent = e.message;
+    err.hidden = false;
+  }
+}
+
+document.getElementById("model-btn").addEventListener("click", openModelModal);
+document.getElementById("model-cancel").addEventListener("click", closeModelModal);
+document.getElementById("model-save").addEventListener("click", saveModelSettings);
+document.querySelectorAll('input[name="provider"]').forEach(r => r.addEventListener("change", showProviderFields));
+modelModal.addEventListener("keydown", e => { if (e.key === "Escape") closeModelModal(); });
+modelModal.addEventListener("click", e => { if (e.target === modelModal) closeModelModal(); });
+loadModelSettings();
+
 function escHtml(s) {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }

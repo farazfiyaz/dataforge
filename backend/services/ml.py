@@ -47,6 +47,30 @@ _MODELS = {
     ("regression", "linear"):     lambda: LinearRegression(),
 }
 
+# Names models write instead of the short keys ("random_forest", "xgboost"…)
+_MODEL_ALIASES = {
+    "rf": "rf", "randomforest": "rf", "random_forest": "rf", "forest": "rf",
+    "gb": "gb", "gbm": "gb", "gradientboosting": "gb", "gradient_boosting": "gb",
+    "boosting": "gb", "xgb": "gb", "xgboost": "gb", "lightgbm": "gb", "lgbm": "gb",
+    "linear": "linear", "lr": "linear", "logistic": "linear",
+    "logistic_regression": "linear", "logisticregression": "linear",
+    "linear_regression": "linear", "linearregression": "linear",
+}
+_TASK_ALIASES = {
+    "classification": "classification", "classifier": "classification",
+    "classify": "classification", "binary": "classification",
+    "multiclass": "classification",
+    "regression": "regression", "regressor": "regression", "regress": "regression",
+}
+
+
+def _normalize(value, aliases: dict, kind: str) -> str:
+    key = str(value).strip().lower().replace("-", "_").replace(" ", "_")
+    if key not in aliases:
+        allowed = sorted(set(aliases.values()))
+        raise ValueError(f"unknown {kind} {value!r} — use one of {allowed}")
+    return aliases[key]
+
 
 def train_model(df: pd.DataFrame, target: str, task: str = None,
                 model: str = "rf", features: list = None, test_size: float = 0.2):
@@ -61,6 +85,18 @@ def train_model(df: pd.DataFrame, target: str, task: str = None,
     """
     if target not in df.columns:
         raise ValueError(f"target '{target}' not in columns: {list(df.columns)}")
+    model = _normalize(model, _MODEL_ALIASES, "model")
+    if task is not None:
+        task = _normalize(task, _TASK_ALIASES, "task")
+    if features is not None:
+        features = [features] if isinstance(features, str) else list(features)
+        missing = [c for c in features if c not in df.columns]
+        if missing:
+            raise ValueError(f"features not in columns: {missing} — columns are {list(df.columns)}")
+        # the target as its own feature gives a perfect, meaningless score
+        features = [c for c in features if c != target]
+        if not features:
+            raise ValueError("features must name at least one column other than the target")
 
     data = df.dropna(subset=[target]).copy()
     y = data[target]
@@ -68,12 +104,20 @@ def train_model(df: pd.DataFrame, target: str, task: str = None,
     # ── auto-detect task ──
     # text labels are dtype `object` in pandas 2 but `str` in pandas 3
     y_is_text = pd.api.types.is_object_dtype(y) or pd.api.types.is_string_dtype(y)
+    y_is_cat = isinstance(y.dtype, pd.CategoricalDtype)
     if task is None:
-        task = "classification" if (y_is_text or y.dtype == bool
+        task = "classification" if (y_is_text or y_is_cat or y.dtype == bool
                                     or y.nunique() <= 10) else "regression"
 
     label_encoder = None
-    if task == "classification" and y_is_text:
+    if task == "classification" and y_is_cat:
+        # binned targets (pd.cut) hold Interval labels sklearn rejects as
+        # "unknown"; encode by the categories' own order so bins stay sorted
+        y = y.cat.remove_unused_categories()
+        label_encoder = LabelEncoder()
+        label_encoder.classes_ = np.array([str(c) for c in y.cat.categories], dtype=object)
+        y = pd.Series(y.cat.codes.astype(int), index=data.index)
+    elif task == "classification" and y_is_text:
         label_encoder = LabelEncoder()
         y = pd.Series(label_encoder.fit_transform(y), index=data.index)
 
@@ -150,7 +194,11 @@ def _report_classification(pipe, X_te, y_te, y_pred, label_encoder):
     print(f"Accuracy: {acc:.3f}  |  Precision: {prec:.3f}  |  "
           f"Recall: {rec:.3f}  |  F1: {f1:.3f}")
 
-    binary = len(np.unique(y_te)) == 2
+    # Binary means the *model* has two classes. The test split alone can miss a
+    # rare class, and predict_proba's second column is then not "the positive
+    # class" of y_te. Both test classes must be present for an ROC curve.
+    classes = pipe.named_steps["model"].classes_
+    binary = len(classes) == 2 and set(np.unique(y_te)) == set(classes)
     auc = None
     if binary and hasattr(pipe, "predict_proba"):
         proba = pipe.predict_proba(X_te)[:, 1]
@@ -160,9 +208,11 @@ def _report_classification(pipe, X_te, y_te, y_pred, label_encoder):
     fig, axes = plt.subplots(1, 3 if binary else 2, figsize=(15 if binary else 10, 4))
     fig.suptitle("Model diagnostics")
 
-    # confusion matrix
-    cm = confusion_matrix(y_te, y_pred)
-    labels = label_encoder.classes_ if label_encoder is not None else np.unique(y_te)
+    # confusion matrix, over every class seen in training or testing so the
+    # matrix and its tick labels always have the same size
+    label_ids = np.union1d(classes, np.unique(y_te))
+    cm = confusion_matrix(y_te, y_pred, labels=label_ids)
+    labels = label_encoder.classes_[label_ids] if label_encoder is not None else label_ids
     ax = axes[0]
     ax.imshow(cm, cmap="Blues")
     ax.set_xticks(range(len(labels)), labels, rotation=45, ha="right")
@@ -175,7 +225,7 @@ def _report_classification(pipe, X_te, y_te, y_pred, label_encoder):
 
     # ROC curve (binary only)
     if binary and auc is not None:
-        fpr, tpr, _ = roc_curve(y_te, proba)
+        fpr, tpr, _ = roc_curve(y_te, proba, pos_label=classes[1])
         axes[1].plot(fpr, tpr, color="#4f9cf9")
         axes[1].plot([0, 1], [0, 1], "--", color="gray")
         axes[1].set_title(f"ROC curve (AUC={auc:.3f})")

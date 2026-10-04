@@ -9,12 +9,13 @@ by itself ("load sales.csv and compare it with the uploaded data"). Access is
 strictly confined to the chosen folder — path traversal outside it is blocked.
 """
 
+import io
 import os
 from pathlib import Path
 
 import pandas as pd
 
-from services.loader import read_table
+from services.loader import _SNIFF_BYTES, _decode, _sniff_delimiter, read_table
 
 DATA_EXTENSIONS = {".csv", ".xlsx", ".xls", ".json", ".parquet", ".tsv"}
 
@@ -80,7 +81,18 @@ def load_file(relpath: str, **kwargs) -> pd.DataFrame:
     if ext in (".csv", ".tsv", ".xlsx", ".xls") and not kwargs:
         return read_table(p.read_bytes(), p.name)   # sniffs encoding/delimiter/decimal
     if ext in (".csv", ".tsv"):
-        return pd.read_csv(p, sep="\t" if ext == ".tsv" else ",", **kwargs)
+        # the caller's options win (load_file("x.csv", sep=";") used to raise
+        # "multiple values for keyword argument 'sep'"); sniff whatever they leave out
+        if "encoding" in kwargs:
+            source = p
+            with open(p, encoding=kwargs["encoding"], errors="replace") as f:
+                sample = f.read(_SNIFF_BYTES)
+        else:
+            text = _decode(p.read_bytes())
+            source, sample = io.StringIO(text), text[:_SNIFF_BYTES]
+        if "sep" not in kwargs and "delimiter" not in kwargs:
+            kwargs["sep"] = "\t" if ext == ".tsv" else _sniff_delimiter(sample)
+        return pd.read_csv(source, **kwargs)
     if ext in (".xlsx", ".xls"):
         return pd.read_excel(p, **kwargs)
     if ext == ".json":

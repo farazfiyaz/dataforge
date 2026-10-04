@@ -19,7 +19,7 @@ def run_eda(df: pd.DataFrame) -> dict[str, Any]:
         "shape": {"rows": len(df), "cols": len(df.columns)},
         "columns": [],
         "duplicates": int(df.duplicated().sum()),
-        "sample": df.head(5).fillna("").to_dict(orient="records"),
+        "sample": table_records(df, 5),
         "date_column": find_date_column(df),
     }
 
@@ -33,7 +33,9 @@ def run_eda(df: pd.DataFrame) -> dict[str, Any]:
             "is_id": is_id_column(series, col),
         }
 
-        if pd.api.types.is_numeric_dtype(series):
+        # bool counts as numeric to pandas, but quantiles of True/False raise
+        # in numpy, and a yes/no flag reads better as value counts anyway
+        if pd.api.types.is_numeric_dtype(series) and not pd.api.types.is_bool_dtype(series):
             desc = series.describe()
             col_info.update({
                 "kind": "numeric",
@@ -45,6 +47,16 @@ def run_eda(df: pd.DataFrame) -> dict[str, Any]:
                 "q25": _safe(desc.get("25%")),
                 "q75": _safe(desc.get("75%")),
                 "outlier_count": int(_count_outliers(series)),
+            })
+        elif _is_date_column(series, col):
+            # Dates aren't categories: "top values of signup_date" is a
+            # meaningless chart, and the profile counted them as categorical
+            dates = _as_dates(series).dropna()
+            col_info.update({
+                "kind": "datetime",
+                "unique_count": int(series.nunique()),
+                "min": dates.min().isoformat() if len(dates) else None,
+                "max": dates.max().isoformat() if len(dates) else None,
             })
         else:
             col_info.update({
@@ -77,18 +89,63 @@ def find_date_column(df: pd.DataFrame) -> str | None:
         if pd.api.types.is_datetime64_any_dtype(df[c]):
             return c
     for c in df.columns:
-        # object (pandas 2) or str (pandas 3) columns named like dates
-        if (df[c].dtype == object or pd.api.types.is_string_dtype(df[c])) and _DATE_HINTS.search(str(c)):
-            sample = df[c].dropna().astype(str).head(50)
-            if sample.empty:
-                continue
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                parsed = pd.to_datetime(sample, errors="coerce")
-            if parsed.notna().mean() > 0.8:
-                return c
+        if _is_date_column(df[c], c):
+            return c
     return None
 
+
+def _is_date_column(s: pd.Series, name) -> bool:
+    """A datetime dtype, or text named like a date that parses as one."""
+    if pd.api.types.is_datetime64_any_dtype(s):
+        return True
+    # object (pandas 2) or str (pandas 3) columns named like dates
+    if not ((s.dtype == object or pd.api.types.is_string_dtype(s)) and _DATE_HINTS.search(str(name))):
+        return False
+    sample = s.dropna().astype(str).head(50)
+    return not sample.empty and _as_dates(sample).notna().mean() > 0.8
+
+
+def _as_dates(s: pd.Series) -> pd.Series:
+    if pd.api.types.is_datetime64_any_dtype(s):
+        return s
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return pd.to_datetime(s.astype(str).where(s.notna()), errors="coerce")
+
+
+
+def table_records(df: pd.DataFrame, n: int) -> list[dict] | None:
+    """
+    First n rows as JSON-ready records. The table is a display extra, so this
+    never fails the run (None means "no table").
+    - Infinities (a spreadsheet's #DIV/0! saved as "inf", a ratio divided by
+      zero) aren't valid JSON: shown as the text "inf" / "-inf".
+    - `fillna("")` raises on a categorical column with gaps (what `pd.cut`
+      gives for out-of-range values): missing cells become "" via `where`.
+    - Timestamps, intervals and other objects aren't JSON: shown as text.
+    """
+    try:
+        cells = df.head(n).astype(object)
+        cells = cells.where(cells.notna(), "")
+        return [{str(k): _json_cell(v) for k, v in row.items()} for row in cells.to_dict(orient="records")]
+    except Exception:
+        return None
+
+
+def _json_cell(v):
+    if isinstance(v, float) and np.isinf(v):
+        return "inf" if v > 0 else "-inf"
+    if v is None or isinstance(v, (str, int, float, bool)):
+        return v
+    if isinstance(v, (np.integer, np.floating, np.bool_)):
+        return _json_cell(v.item())
+    return str(v)
+
+
+def finite(s: pd.Series) -> pd.Series:
+    """Non-missing, finite values — matplotlib refuses to bin a range that reaches inf."""
+    s = s.dropna()
+    return s[np.isfinite(s.astype(float))] if pd.api.types.is_float_dtype(s) else s
 
 
 def _safe(val) -> Any:

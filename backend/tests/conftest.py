@@ -11,11 +11,52 @@ from fastapi.testclient import TestClient
 # via `python app.py` — mirror that here.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app import app  # noqa: E402
+from app import app, SESSION_COOKIE, TOKEN  # noqa: E402
 
 APP_ORIGIN = "http://localhost:8000"
 
 
 @pytest.fixture
 def client():
+    """Signed in, like the DataForge window (Electron sets this cookie on it)."""
+    return TestClient(app, base_url=APP_ORIGIN, cookies={SESSION_COOKIE: TOKEN})
+
+
+@pytest.fixture
+def anonymous_client():
+    """Any other program on the computer: right host and origin, no token."""
     return TestClient(app, base_url=APP_ORIGIN)
+
+
+@pytest.fixture(autouse=True)
+def temp_settings(tmp_path, monkeypatch):
+    """Never read or write the user's real ~/.dataforge/settings.json in tests."""
+    from services import settings
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def memory_vault(monkeypatch):
+    """Never read or write the real OS credential store in tests."""
+    from services import vault
+    store = {}
+    monkeypatch.setattr(vault, "get", lambda name: store.get(name, ""))
+    monkeypatch.setattr(vault, "put", lambda name, value: store.__setitem__(name, value) if value else store.pop(name, None))
+    return store
+
+
+@pytest.fixture(autouse=True)
+def temp_history(tmp_path, monkeypatch):
+    """Never read or write the user's real ~/.dataforge/history.bin in tests."""
+    from services import history
+    monkeypatch.setattr(history, "HISTORY_PATH", tmp_path / "history.bin")
+
+
+@pytest.fixture(autouse=True)
+def no_workspace():
+    """The workspace folder is process-global; don't let one test's leak into another."""
+    from services import workspace
+    workspace._workspace_root = None
+    yield
+    workspace._workspace_root = None

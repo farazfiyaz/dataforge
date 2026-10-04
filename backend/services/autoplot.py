@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
 from services.cleaner import text_columns
-from services.eda import is_id_column
+from services.eda import finite, is_id_column
 
 DARK   = "#0f1117"
 SURF   = "#1a1d27"
@@ -97,7 +97,7 @@ def plot_histograms(df: pd.DataFrame) -> dict | None:
     for i, col in enumerate(num_cols):
         ax = axes_flat[i]
         _style(fig, ax)
-        data = df[col].dropna()
+        data = finite(df[col])
         ax.hist(data, bins=30, color=ACCENT, alpha=0.85, edgecolor=SURF)
         ax.set_title(col, fontsize=9)
         ax.set_xlabel("Value", fontsize=8)
@@ -122,7 +122,7 @@ def plot_correlation(df: pd.DataFrame) -> dict | None:
     if len(num_cols) < 2:
         return None
 
-    corr = df[num_cols].corr()
+    corr = df[num_cols].replace([np.inf, -np.inf], np.nan).corr()
     size = max(8, len(num_cols) * 0.6)
     fig, ax = plt.subplots(figsize=(size, size * 0.85))
     _style(fig, ax)
@@ -156,12 +156,18 @@ def plot_correlation(df: pd.DataFrame) -> dict | None:
 
 
 def plot_categoricals(df: pd.DataFrame) -> list[dict]:
-    """Bar charts for top categorical columns."""
-    cat_cols = text_columns(df, include_category=True)[:6]
+    """Bar charts for top categorical columns, True/False flags included."""
+    kinds = set(text_columns(df, include_category=True)) | set(df.select_dtypes(include=["bool", "boolean"]).columns)
+    cat_cols = [c for c in df.columns if c in kinds]
     results = []
     for col in cat_cols:
+        if len(results) == 6:
+            break
+        # order_id / email-style columns: every bar would be a count of 1
+        if is_id_column(df[col], col):
+            continue
         vc = df[col].value_counts().head(10)
-        if len(vc) < 2:
+        if len(vc) < 2 or vc.iloc[0] == 1:
             continue
         fig, ax = plt.subplots(figsize=(7, 3.5))
         _style(fig, ax)
@@ -192,7 +198,7 @@ def plot_boxplots(df: pd.DataFrame) -> dict | None:
     for i, col in enumerate(num_cols):
         ax = axes_flat[i]
         _style(fig, ax)
-        data = df[col].dropna()
+        data = finite(df[col])
         bp = ax.boxplot(data, patch_artist=True, widths=0.5,
                         medianprops={"color": ACCENT2, "linewidth": 2},
                         boxprops={"facecolor": ACCENT, "alpha": 0.6, "linewidth": 0},

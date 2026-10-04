@@ -1,6 +1,6 @@
 # DataForge
 
-**AI-powered data science tool that runs 100% locally — your data never leaves your machine.**
+**AI-powered data science tool that runs locally by default — your data never leaves your machine unless you switch on cloud mode.**
 
 Upload a CSV or Excel file and talk to your data: DataForge profiles it, cleans it, plots it, and answers questions by writing and executing Python — autonomously, like an AI data scientist in a notebook.
 
@@ -20,11 +20,15 @@ Copyright © 2026 Mohammed Farazuddin · [farazfiyaz2@gmail.com](mailto:farazfiy
 
 **📂 Real-world files** — CSVs saved by Excel on Windows (cp1252), semicolon-separated files with decimal commas (European Excel exports), tab-separated files, `.xlsx` and `.xls` all load correctly.
 
+**💾 Downloads** — every chart can be downloaded as PNG and every table as CSV. DataForge writes nothing to disk on its own: what you keep is what you download.
+
 **🗄️ Big-data aware** — datasets are parsed once and stored server-side (referenced by id, never re-uploaded per message), and the agent is trained to sample before plotting and never dump full DataFrames.
 
-**🔒 Fully local** — FastAPI backend + Ollama LLM + Electron desktop shell. No cloud, no API keys, no data leaving your machine. The backend listens on `127.0.0.1` only and rejects requests from other websites, so nothing else on your machine or network can reach the code-execution API.
+**🔒 Local by default** — FastAPI backend + Ollama LLM + Electron desktop shell. Out of the box there is no cloud, no API key, and no data leaving your machine. The backend listens on `127.0.0.1` only and rejects requests from other websites, so nothing else on your machine or network can reach the code-execution API.
 
 **🛟 Works with small local models** — `qwen2.5-coder` often writes tool calls as text instead of native calls; the agent recovers them, runs notebook-style code (`df.head()` shows its output), stops runaway code after 2 minutes, and explains Ollama problems in plain terms ("run `ollama pull …`").
+
+**☁️ Optional cloud mode and bigger models** — the **Model** button lets you pick any model you've downloaded into Ollama (e.g. `qwen2.5-coder:14b` or `:32b` for better answers), or opt in to Claude by Anthropic (Opus 5, Sonnet 5 or Haiku 4.5) with your own API key for much stronger, faster analysis. An optional **Search the web** switch lets it look things up (only the search words are sent). Cloud mode shows exactly what gets sent (questions, column names and sample values, and what the analysis prints), and the app says which model is answering at all times. The key is stored only in `~/.dataforge/settings.json`.
 
 **💻 Adapts to your hardware** — on first launch, DataForge checks how much RAM the machine has and picks a matching `qwen2.5-coder` size (1.5B / 3B / 7B), downloading it automatically if it isn't installed yet. No manual config needed to run on a low-spec laptop vs. a workstation.
 

@@ -15,7 +15,7 @@ from datetime import datetime
 import matplotlib.dates as mdates
 import numpy as np
 import pandas as pd
-from matplotlib.collections import PathCollection, QuadMesh
+from matplotlib.collections import PathCollection, PolyCollection, QuadMesh
 from matplotlib.container import BarContainer
 from matplotlib.patches import Wedge
 
@@ -47,8 +47,14 @@ def _describe_axes(ax) -> str:
     for c, name in zip(bars, names):
         items.append(_bars(ax, c, name, error_lines))
     items.append(_pie(ax))
-    items.extend(_lines(ax, skip=error_lines))
+    violin_lines = set()   # a violin's inner box, described with the violin
+    items.append(_violins(ax, violin_lines))
+    items.extend(_lines(ax, skip=error_lines | violin_lines))
+    grouped, strip_colls = _category_points(ax)
+    items.append(grouped)
     for coll in ax.collections:
+        if coll in strip_colls:
+            continue
         if isinstance(coll, PathCollection) and len(coll.get_offsets()):
             pts = coll.get_offsets()
             items.append(f"scatter: {len(pts)} points, "
@@ -220,6 +226,132 @@ def _x_text(axis, v):
 
 def _date(ts) -> str:
     return ts.strftime("%Y-%m-%d") if ts == ts.normalize() else ts.strftime("%Y-%m-%d %H:%M")
+
+
+def _violins(ax, used) -> str:
+    """
+    Per-violin summary. A violin body is a polygon mirrored around its
+    category position; seaborn's default inner box is drawn as lines at that
+    position: a thin whisker, a thick middle 50%, and a one-point median;
+    inner="quart" draws three lines across it instead. Those lines are added
+    to `used` so they aren't read as a box plot.
+    """
+    found = []
+    for coll in ax.collections:
+        if not isinstance(coll, PolyCollection) or not coll.get_paths():
+            continue
+        verts = np.concatenate([p.vertices for p in coll.get_paths()])
+        shape = _mirrored(verts)
+        if shape:
+            found.append(shape)
+    if not found:
+        return ""
+    vertical = found[0][0]
+    labels = _tick_texts(ax, vertical)
+    positions = [shape[1] for shape in found]
+    if labels:
+        names = _box_names(ax, positions, labels)
+    else:   # a lone unlabelled violin (seaborn with only y) needs no name
+        names = [""] if len(found) == 1 else [_f(p) for p in positions]
+    parts = []
+    for (_, pos, half, lo, hi, densest), name in zip(found, names):
+        inner, across = {}, []
+        for line in ax.get_lines():
+            p = _nums(line.get_xdata() if vertical else line.get_ydata())
+            v = _nums(line.get_ydata() if vertical else line.get_xdata())
+            if p and all(abs(x - pos) < 1e-6 for x in p) and len(v) in (1, 2):
+                used.add(line)
+                inner.setdefault(len(v), []).append((line.get_linewidth(), v))
+            elif len(p) == 2 and len(v) == 2 and v[0] == v[1] and all(abs(x - pos) <= half + 1e-6 for x in p):
+                used.add(line)
+                across.append(v[0])
+        part = f"{name}: " if name else ""
+        twos = sorted(inner.get(2, []), key=lambda t: t[0])
+        if inner.get(1) and len(twos) == 2:
+            (_, whisk), (_, box) = twos
+            part += (f"median {_f(inner[1][0][1][0])}, middle 50% {_f(min(box))}–{_f(max(box))}, "
+                     f"whiskers {_f(min(whisk))}–{_f(max(whisk))}, ")
+        elif len(across) == 3:
+            q1, median, q3 = sorted(across)
+            part += f"median {_f(median)}, middle 50% {_f(q1)}–{_f(q3)}, density from {_f(lo)} to {_f(hi)}, "
+        else:
+            part += f"density from {_f(lo)} to {_f(hi)}, "
+        parts.append(part + f"densest near {_f(densest)}")
+    more = f"; +{len(parts) - MAX_BOXES_LISTED} more violins" if len(parts) > MAX_BOXES_LISTED else ""
+    count = "1 violin" if len(parts) == 1 else f"{len(parts)} violins"
+    return f"violin plot, {count}: " + "; ".join(parts[:MAX_BOXES_LISTED]) + more
+
+
+def _mirrored(verts):
+    """
+    (vertical, position, half width, low, high, densest value) if the polygon
+    is a violin body, else None. Besides being mirrored, a violin narrows
+    towards both ends; a symmetric area chart is mirrored too, but its
+    baseline is full width.
+    """
+    if len(verts) < 10:
+        return None
+    for vertical in (True, False):
+        pos, val = (verts[:, 0], verts[:, 1]) if vertical else (verts[:, 1], verts[:, 0])
+        width, span = pos.max() - pos.min(), val.max() - val.min()
+        if width <= 0 or span <= 0:
+            continue
+        centre = (pos.max() + pos.min()) / 2
+        d = pos - centre
+        tol = width * 1e-3
+        right = {(round(v / span, 4), round(x / width, 3)) for v, x in zip(val, d) if x > tol}
+        left = {(round(v / span, 4), round(-x / width, 3)) for v, x in zip(val, d) if x < -tol}
+        if len(right) < 5 or len(right & left) < 0.9 * max(len(right), len(left)):
+            continue
+        half = np.abs(d).max()
+        ends = np.isclose(val, val.min()) | np.isclose(val, val.max())
+        if np.abs(d[ends]).max() >= 0.9 * half:
+            continue
+        return vertical, centre, half, val.min(), val.max(), val[np.argmax(np.abs(d))]
+    return None
+
+
+def _tick_texts(ax, vertical) -> dict:
+    ticks = ax.get_xticklabels() if vertical else ax.get_yticklabels()
+    return {round(t.get_position()[0 if vertical else 1], 6): t.get_text() for t in ticks if t.get_text()}
+
+
+def _category_points(ax):
+    """
+    Strip and swarm plots: one scatter per category, jittered around the
+    category's tick. Named by category instead of listing jittered x ranges.
+    Returns (description, the collections it covered).
+    """
+    colls = [c for c in ax.collections if isinstance(c, PathCollection) and len(c.get_offsets())]
+    for vertical in (True, False):
+        labels = _tick_texts(ax, vertical)
+        # categorical axis: tick labels that aren't just the tick positions
+        if not labels or all(_is_num(_num_text(t)) and abs(float(_num_text(t)) - p) < 1e-9
+                             for p, t in labels.items()):
+            continue
+        groups, covered = {}, []
+        for c in colls:
+            pts = np.asarray(c.get_offsets(), dtype=float)
+            pos, val = (pts[:, 0], pts[:, 1]) if vertical else (pts[:, 1], pts[:, 0])
+            near = [p for p in labels if np.all(np.abs(pos - p) < 0.5)]
+            if len(near) != 1:
+                continue
+            groups.setdefault(near[0], []).extend(val[np.isfinite(val)])
+            covered.append(c)
+        if not groups:
+            continue
+        parts = [f"{labels[p]}: {len(v)} points, {_f(min(v))}–{_f(max(v))}, median {_f(float(np.median(v)))}"
+                 for p, v in sorted(groups.items()) if v]
+        more = f"; +{len(parts) - MAX_BOXES_LISTED} more groups" if len(parts) > MAX_BOXES_LISTED else ""
+        return f"points by category, {len(parts)} groups: " + "; ".join(parts[:MAX_BOXES_LISTED]) + more, covered
+    return "", []
+
+
+def _num_text(t):
+    try:
+        return float(t.replace("−", "-"))
+    except ValueError:
+        return None
 
 
 def _strongest_cells(ax, arr) -> str:

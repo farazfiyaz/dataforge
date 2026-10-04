@@ -385,6 +385,17 @@ time series (periods), matplotlib/seaborn datetimes, timestamps with times,
 category labels and plain numbers, and stays aligned when values are missing.
 Scatter x ranges over dates are shown as dates.
 
+### 2026-10-05 — Describe violin, strip and swarm plots per category
+The agent was told a seaborn violin plot was "box plot: boxes and whiskers span
+13.67 to 96.89" (it read the violins' inner boxes as one box plot), and strip
+or swarm plots as unnamed scatters with jittered x ranges ("x -0.098–0.097").
+Violin bodies are now recognised as polygons mirrored around their category
+and narrowing at both ends, and each one is named by its tick (or "tick / hue")
+with the median, middle 50% and whiskers from its inner box (or quartile
+lines), plus where the density peaks. Strip and swarm points are grouped by
+category: "basic: 40 points, 8.375–27.47, median 19.35". Split violins still
+fall back to the old box-plot line.
+
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`
   escapes. Real isolation needs a subprocess kernel (which would also allow a
@@ -399,7 +410,6 @@ Scatter x ranges over dates are shown as dates.
 - Recommendations could offer "one-click run" instead of just filling the input.
 - Box plots with several boxes are summarised as one combined span; per-box medians/quartiles would be better.
 - Live: for "churn rate per plan as a bar chart" the model ran `sns.barplot(y='churn', estimator=...)` on the yes/no text column, giving an empty chart (the table was right). Tell it to compute the rate first and plot that.
-- Violin/strip/swarm plots aren't described beyond their raw collections.
 - Uploads (`/api/upload`, agent `df`) still keep ", "-padded headers and cells
   (` plan`, `" 34"` as text); the loader could read with `skipinitialspace=True`.
 - A numeric column with any `inf` gets `mean`/`max` of null in the profile; stats over the

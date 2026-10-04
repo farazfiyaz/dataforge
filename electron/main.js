@@ -11,7 +11,7 @@
  *  5. Kill the backend + any Ollama instance we started, cleanly, on app quit
  */
 
-const { app, BrowserWindow, shell, Menu, nativeTheme, session } = require("electron");
+const { app, BrowserWindow, shell, Menu, nativeTheme, session, dialog, ipcMain } = require("electron");
 const path   = require("path");
 const http   = require("http");
 const net    = require("net");
@@ -329,6 +329,21 @@ async function createWindow() {
   mainWindow.on("closed", () => { mainWindow = null; });
 }
 
+// Native folder picker for the Workspace button. The renderer can't use
+// window.prompt() — Electron throws "prompt() is not supported" — so the
+// button used to do nothing at all in the desktop app.
+function registerIpc() {
+  ipcMain.handle("df:pick-folder", async (event, defaultPath) => {
+    const result = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+      title: "Choose a workspace folder",
+      buttonLabel: "Use this folder",
+      properties: ["openDirectory"],
+      ...(typeof defaultPath === "string" && defaultPath ? { defaultPath } : {}),
+    });
+    return result.canceled ? null : result.filePaths[0] ?? null;
+  });
+}
+
 // Build a minimal app menu (File / Edit / View)
 function buildMenu() {
   const template = [
@@ -367,6 +382,7 @@ function buildMenu() {
 // ── 4. App lifecycle ──────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
   buildMenu();
+  registerIpc();
   await startOllama();
   // Don't block backend/window startup on this — the UI shows a status banner
   // (via df:model-status) while it settles, possibly including a first-run download.

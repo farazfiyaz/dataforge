@@ -374,6 +374,16 @@ Now common model and task names are mapped to the short keys ("xgboost" → `gb`
 a single feature can be passed as a string, and unknown names raise a
 `ValueError` that lists the valid options or columns, so the agent can fix its
 next step.
+### 2026-10-04 — Workspace button opens a native folder picker
+The 📁 Workspace button asked for the folder with `window.prompt()`, which
+Electron doesn't implement. Probed in Electron 33.4.11, it throws "prompt() is
+not supported", and in the async click handler that was an unhandled rejection,
+so in the desktop app the button did nothing at all. Now the main process
+handles `df:pick-folder` with a native "choose folder" dialog (opened at the
+current workspace), exposed as `window.dataforge.pickFolder()` in the preload.
+The browser fallback still uses `prompt()`, and `set_workspace` now accepts a
+path pasted from Explorer's "Copy as path" (wrapped in quotes), which it used
+to reject as "not a folder".
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`

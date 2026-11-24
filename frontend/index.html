@@ -1497,10 +1497,17 @@ document.getElementById("workspace-btn").addEventListener("click", async () => {
     body: JSON.stringify({ path: "" }),
   }).then(r => r.json()).catch(() => ({}));
 
-  const path = prompt(
-    "Folder the agent may browse and load data files from:",
-    current.path || "C:\\Users\\"
-  );
+  // Desktop app: native folder dialog (Electron throws on window.prompt, so
+  // the button used to do nothing). Plain browser: type or paste the path.
+  let path;
+  try {
+    path = window.dataforge?.pickFolder
+      ? await window.dataforge.pickFolder(current.path || undefined)
+      : prompt("Folder the agent may browse and load data files from:", current.path || "C:\\Users\\");
+  } catch (e) {
+    appendError(addAssistantTurn(), `Couldn't open the folder picker: ${e.message}`);
+    return;
+  }
   if (!path) return;
 
   const res = await fetch(`${API}/agent/workspace`, {

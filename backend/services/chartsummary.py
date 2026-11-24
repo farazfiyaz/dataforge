@@ -7,13 +7,15 @@ Describe a rendered matplotlib figure in text, for the agent.
 The model can't see the PNGs it draws — it used to be told only "chart
 rendered", so it answered "the highest bar is the answer" without knowing
 which bar that was. This reads the plotted data back out of the figure:
-bar labels and heights, line and scatter ranges, heatmap value ranges.
+bar labels and heights, pie shares, line and scatter ranges, heatmap value ranges.
 """
 
 from matplotlib.collections import PathCollection, QuadMesh
 from matplotlib.container import BarContainer
+from matplotlib.patches import Wedge
 
 MAX_BARS_LISTED = 20
+MAX_BOXES_LISTED = 12
 MAX_CHARS = 1500
 
 
@@ -34,10 +36,13 @@ def _describe_axes(ax) -> str:
     head = ", ".join(f"{k} '{v}'" for k, v in (
         ("title", ax.get_title()), ("x", ax.get_xlabel()), ("y", ax.get_ylabel())) if v)
     items = []
-    for c in ax.containers:
-        if isinstance(c, BarContainer):
-            items.append(_bars(ax, c))
-    items.extend(_lines(ax))
+    error_lines = set()   # seaborn error bars, described with their bars
+    bars = [c for c in ax.containers if isinstance(c, BarContainer)]
+    names = _legend_names(ax, bars)
+    for c, name in zip(bars, names):
+        items.append(_bars(ax, c, name, error_lines))
+    items.append(_pie(ax))
+    items.extend(_lines(ax, skip=error_lines))
     for coll in ax.collections:
         if isinstance(coll, PathCollection) and len(coll.get_offsets()):
             pts = coll.get_offsets()
@@ -52,22 +57,27 @@ def _describe_axes(ax) -> str:
         arr = img.get_array()
         if arr is not None and arr.size:
             items.append(f"image/heatmap: values {_f(arr.min())} to {_f(arr.max())}")
-    if not items:
+    if not any(items):
         return ""
     return f"[{head or 'chart'}] " + "; ".join(i for i in items if i)
 
 
-def _lines(ax) -> list[str]:
+def _lines(ax, skip=()) -> list[str]:
     """
     Plain lines are described one by one. Box plots are drawn as many short
     segments plus marker-only "flier" points; listing those segment by segment
-    is noise, so they're summarised as whisker span + outlier values.
+    is noise, so they're summarised per box (median, middle 50%, whiskers,
+    outliers), falling back to one whisker span + outlier values.
     """
-    data = [(line, _nums(line.get_xdata()), _nums(line.get_ydata())) for line in ax.get_lines()]
+    data = [(line, _nums(line.get_xdata()), _nums(line.get_ydata()))
+            for line in ax.get_lines() if line not in skip]
     points = [d for d in data if _markers_only(d[0]) and d[1]]
     segments = [d for d in data if not _markers_only(d[0]) and 2 <= len(d[1]) <= 5]
     out = []
-    if len(segments) >= 4:   # box-plot structure: box outline, whiskers, caps, median
+    boxes = _boxes(ax, segments, points) if len(segments) >= 4 else None
+    if boxes:
+        out.append(boxes)
+    elif len(segments) >= 4:   # box-plot structure: box outline, whiskers, caps, median
         xs = [v for _, x, _ in segments for v in x]
         ys = [v for _, _, y in segments for v in y]
         vertical = (max(ys) - min(ys)) >= (max(xs) - min(xs))
@@ -90,6 +100,82 @@ def _lines(ax) -> list[str]:
     return out
 
 
+def _boxes(ax, segments, points) -> str:
+    """
+    Per-box summary: median, middle 50% and whiskers of each box, by category.
+    matplotlib, pandas and seaborn all draw a box as two whiskers along the
+    value axis at the box's position (box edge → whisker end), plus caps and a
+    median across it; the median is the widest of those. Returns "" if the
+    lines don't have that structure.
+    """
+    best = None
+    for vertical in (True, False):
+        pos_of = (lambda xs, ys: xs) if vertical else (lambda xs, ys: ys)
+        val_of = (lambda xs, ys: ys) if vertical else (lambda xs, ys: xs)
+        whiskers, across = {}, []
+        for _, xs, ys in segments:
+            if len(xs) != 2 or len(ys) != 2:
+                continue
+            p, v = pos_of(xs, ys), val_of(xs, ys)
+            if p[0] == p[1]:
+                whiskers.setdefault(round(p[0], 6), []).append(v)
+            elif v[0] == v[1]:
+                across.append(((p[0] + p[1]) / 2, abs(p[1] - p[0]), v[0]))
+        pairs = {pos: w for pos, w in whiskers.items() if len(w) == 2}
+        if pairs and (best is None or len(pairs) > len(best[1])):
+            best = (vertical, pairs, across)
+    if best is None:
+        return ""
+    vertical, pairs, across = best
+    labels = {round(t.get_position()[0 if vertical else 1], 6): t.get_text()
+              for t in (ax.get_xticklabels() if vertical else ax.get_yticklabels()) if t.get_text()}
+    names = _box_names(ax, sorted(pairs), labels)
+    rows = []
+    for pos, name in zip(sorted(pairs), names):
+        low, high = sorted(pairs[pos], key=min)
+        lo, q1, q3, hi = min(low), max(low), min(high), max(high)
+        centred = [(width, v) for c, width, v in across if abs(c - pos) < 1e-6 and q1 <= v <= q3]
+        if not centred:
+            return ""
+        median = max(centred)[1]
+        fliers = sorted({(y if vertical else x)[i] for _, x, y in points
+                         for i in range(min(len(x), len(y))) if abs((x if vertical else y)[i] - pos) < 1e-6})
+        rows.append((name, median, q1, q3, lo, hi, fliers))
+    if len(rows) == 1:
+        _, median, q1, q3, lo, hi, fliers = rows[0]
+        desc = f"box plot: boxes and whiskers span {_f(lo)} to {_f(hi)}; median {_f(median)}, middle 50% {_f(q1)}–{_f(q3)}"
+        if fliers:
+            desc += f"; outlier points at {_list(fliers, 15)}"
+        return desc
+    parts = []
+    for label, median, q1, q3, lo, hi, fliers in rows[:MAX_BOXES_LISTED]:
+        part = f"{label}: median {_f(median)}, middle 50% {_f(q1)}–{_f(q3)}, whiskers {_f(lo)}–{_f(hi)}"
+        if fliers:
+            part += f", outliers {_list(fliers, 5)}"
+        parts.append(part)
+    more = f"; +{len(rows) - MAX_BOXES_LISTED} more boxes" if len(rows) > MAX_BOXES_LISTED else ""
+    return f"box plot, {len(rows)} boxes: " + "; ".join(parts) + more
+
+
+def _box_names(ax, positions, labels) -> list[str]:
+    """
+    Tick label under each box. With seaborn `hue`, boxes are dodged off the
+    ticks, `hue` values per tick in legend order, so they're named "tick / hue".
+    """
+    if all(p in labels for p in positions):
+        return [labels[p] for p in positions]
+    legend = ax.get_legend()
+    hues = [t.get_text() for t in legend.get_texts()] if legend else []
+    ticks = [labels[p] for p in sorted(labels)]
+    if hues and ticks and len(positions) == len(hues) * len(ticks):
+        return [f"{ticks[i // len(hues)]} / {hues[i % len(hues)]}" for i in range(len(positions))]
+    return [labels.get(p) or _f(p) for p in positions]
+
+
+def _list(values, limit) -> str:
+    return ", ".join(_f(v) for v in values[:limit]) + (" …" if len(values) > limit else "")
+
+
 def _strongest_cells(ax, arr) -> str:
     """For a labelled square heatmap (e.g. a correlation matrix), name the strongest off-diagonal pairs."""
     xl = [t.get_text() for t in ax.get_xticklabels()]
@@ -110,7 +196,23 @@ def _nums(values) -> list[float]:
     return [float(v) for v in values if _is_num(v)]
 
 
-def _bars(ax, container) -> str:
+def _legend_names(ax, bars) -> list[str]:
+    """
+    Name of each bar series. pandas labels its containers; seaborn (`hue=`)
+    leaves them as `_container0`, so fall back to the legend, which lists the
+    series in drawing order.
+    """
+    names = [c.get_label() or "" for c in bars]
+    names = ["" if n.startswith("_") else n for n in names]
+    legend = ax.get_legend()
+    if len(bars) > 1 and not any(names) and legend:
+        texts = [t.get_text() for t in legend.get_texts()]
+        if len(texts) == len(bars):
+            return texts
+    return names
+
+
+def _bars(ax, container, name="", error_lines=None) -> str:
     horizontal = getattr(container, "orientation", "vertical") == "horizontal"
     patches = container.patches
     values = [p.get_width() if horizontal else p.get_height() for p in patches]
@@ -120,21 +222,65 @@ def _bars(ax, container) -> str:
         at = p.get_y() + p.get_height() / 2 if horizontal else p.get_x() + p.get_width() / 2
         return f"{len(values)} bars (histogram-like), tallest {_f(values[tallest])} at {_f(at)}"
     labels = _tick_labels(ax, patches, horizontal)
-    name = container.get_label()
-    name = "" if not name or name.startswith("_") else f" '{name}'"
+    name = f" '{name}'" if name else ""
     pairs = ", ".join(f"{lab}={_f(v)}" for lab, v in zip(labels, values))
-    return f"bars{name}: {pairs}"
+    errors = _error_bars(ax, patches, labels, horizontal, error_lines)
+    return f"bars{name}: {pairs}" + (f"; error bars: {errors}" if errors else "")
+
+
+def _error_bars(ax, patches, labels, horizontal, used) -> str:
+    """
+    seaborn's barplot draws its confidence interval as one 2-point line
+    through the centre of each bar. On their own those read as a box plot's
+    whiskers (4+ bars) or as unnamed lines, so name them by bar instead.
+    """
+    centres = {round(p.get_y() + p.get_height() / 2 if horizontal else p.get_x() + p.get_width() / 2, 6): lab
+               for p, lab in zip(patches, labels)}
+    found = []
+    for line in ax.get_lines():
+        if used is None or line in used or _markers_only(line):
+            continue
+        xs, ys = _nums(line.get_xdata()), _nums(line.get_ydata())
+        pos, val = (ys, xs) if horizontal else (xs, ys)
+        if len(pos) == 2 and len(val) == 2 and pos[0] == pos[1] and round(pos[0], 6) in centres:
+            used.add(line)
+            found.append((pos[0], centres[round(pos[0], 6)], min(val), max(val)))
+    return ", ".join(f"{lab} {_f(lo)}–{_f(hi)}" for _, lab, lo, hi in sorted(found))
 
 
 def _tick_labels(ax, patches, horizontal) -> list[str]:
-    """Category label under each bar (matched by position), else the bar's position."""
+    """
+    Category label under each bar (matched by position), else the bar's position.
+    Grouped bars (`unstack().plot.bar()`, seaborn `hue=`) sit a fixed offset
+    beside their tick, so a series whose bars are all off-tick by the same
+    amount, less than half the tick spacing, takes the nearest tick's label.
+    """
     ticks = ax.get_yticklabels() if horizontal else ax.get_xticklabels()
     by_pos = {round(t.get_position()[1 if horizontal else 0], 6): t.get_text() for t in ticks if t.get_text()}
-    labels = []
-    for p in patches:
-        centre = p.get_y() + p.get_height() / 2 if horizontal else p.get_x() + p.get_width() / 2
-        labels.append(by_pos.get(round(centre, 6)) or _f(centre))
-    return labels
+    centres = [p.get_y() + p.get_height() / 2 if horizontal else p.get_x() + p.get_width() / 2 for p in patches]
+    labels = [by_pos.get(round(c, 6)) for c in centres]
+    positions = sorted(by_pos)
+    if not all(labels) and len(positions) >= 2:
+        spacing = min(b - a for a, b in zip(positions, positions[1:]))
+        nearest = [min(positions, key=lambda t: abs(t - c)) for c in centres]
+        offsets = [c - t for c, t in zip(centres, nearest)]
+        if (len(set(nearest)) == len(nearest) and max(offsets) - min(offsets) < 1e-6
+                and abs(offsets[0]) < spacing / 2):
+            labels = [by_pos[t] for t in nearest]
+    return [lab or _f(c) for lab, c in zip(labels, centres)]
+
+
+def _pie(ax) -> str:
+    """Pie charts: each wedge's share of the whole (the raw values aren't kept by matplotlib)."""
+    wedges = [p for p in ax.patches if isinstance(p, Wedge)]
+    if not wedges:
+        return ""
+    shares = [(w.theta2 - w.theta1) / 360 * 100 for w in wedges]
+    names = [w.get_label() if w.get_label() and not w.get_label().startswith("_") else f"slice {i + 1}"
+             for i, w in enumerate(wedges)]
+    shown = ", ".join(f"{n} {s:.1f}%" for n, s in list(zip(names, shares))[:MAX_BARS_LISTED])
+    more = f", +{len(wedges) - MAX_BARS_LISTED} more" if len(wedges) > MAX_BARS_LISTED else ""
+    return f"pie, {len(wedges)} slices: {shown}{more}"
 
 
 def _is_num(v) -> bool:

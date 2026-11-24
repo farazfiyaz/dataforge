@@ -6,6 +6,7 @@ from services.eda import run_eda
 from services.datastore import put_dataset
 from services.recommend import recommend
 from services.loader import read_table
+from services.upload_limit import read_upload
 import uuid
 
 router = APIRouter()
@@ -18,7 +19,7 @@ async def upload_file(file: UploadFile = File(...)):
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided.")
 
-    contents = await file.read()
+    contents = await read_upload(file)
     try:
         df = read_table(contents, file.filename)
     except ValueError as e:

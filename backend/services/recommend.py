@@ -49,7 +49,27 @@ def _rec(rec_id: str, title: str, reason: str, prompt: str, score: float) -> dic
     return {"id": rec_id, "title": title, "reason": reason, "prompt": prompt, "_score": score}
 
 
+def _usable_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    The columns the rules can reason about. After a few agent steps `df` may
+    hold duplicate column names (`pd.concat(..., axis=1)`) or list values
+    (`str.split()`); either made every rule raise, and the agent's follow-up
+    suggestions silently disappeared. Keep the first of each name and skip
+    columns whose values can't be counted.
+    """
+    df = df.loc[:, ~df.columns.duplicated()]
+    keep = []
+    for i, c in enumerate(df.columns):
+        try:
+            df.iloc[:, i].nunique()
+        except TypeError:        # unhashable values: lists, dicts, sets
+            continue
+        keep.append(c)
+    return df[keep]
+
+
 def _all_recommendations(df: pd.DataFrame) -> list[dict[str, Any]]:
+    df = _usable_columns(df)
     if df.empty or len(df.columns) == 0:
         return []
 

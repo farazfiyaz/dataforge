@@ -25,6 +25,8 @@ _ENCODINGS = ("utf-8-sig", "cp1252", "latin-1")
 _DELIMITERS = ",;\t|"
 _SNIFF_BYTES = 64 * 1024
 _DECIMAL_COMMA = re.compile(r"(^|;)\s*-?[\d.]*\d,\d+\s*(;|$)", re.MULTILINE)
+# A number as European Excel writes it: "." only between groups of three digits
+_EU_NUMBER = re.compile(r"[+-]?(\d{1,3}(\.\d{3})+|\d+)(,\d+)?([eE][+-]?\d+)?")
 
 
 def read_table(data: bytes, filename: str) -> pd.DataFrame:
@@ -34,19 +36,29 @@ def read_table(data: bytes, filename: str) -> pd.DataFrame:
         raise ValueError("Only CSV, TSV and Excel (.xlsx, .xls) files are supported.")
     if not data.strip():
         raise ValueError("The file is empty.")
-    if ext in EXCEL_EXTENSIONS:
-        return _read_excel(data, ext)
-    return _read_text(data, ext)
+    df = _read_excel(data, ext) if ext in EXCEL_EXTENSIONS else _read_text(data, ext)
+    # A header row alone (an export with its filter set to nothing, or an
+    # empty template) profiled as NaN percentages, which the API couldn't
+    # send as JSON: upload and Auto Analyze answered a bare 500
+    if df.empty:
+        if len(df.columns):
+            raise ValueError(f"The file has column headers ({len(df.columns)}) but no data rows.")
+        raise ValueError("The file is empty.")
+    return df
 
 
 def _read_excel(data: bytes, ext: str) -> pd.DataFrame:
     try:
-        return pd.read_excel(io.BytesIO(data))
+        df = pd.read_excel(io.BytesIO(data))
     except ImportError:
         if ext == "xls":
             raise ValueError("Old-style .xls files need the 'xlrd' package "
                              "(pip install xlrd), or re-save the file as .xlsx.") from None
         raise
+    # Year headers (2023, 2024) come back as ints, which crash the cleaning
+    # report and plot labels; a CSV with the same header gives text "2023"
+    df.columns = [str(c) for c in df.columns]
+    return df
 
 
 def _read_text(data: bytes, ext: str) -> pd.DataFrame:
@@ -56,8 +68,26 @@ def _read_text(data: bytes, ext: str) -> pd.DataFrame:
     # "1,50" style decimals travel with ';' separators (European Excel)
     if sep == ";" and _DECIMAL_COMMA.search(sample):
         # ...and then "." groups thousands: 1.234,50
-        return pd.read_csv(io.StringIO(text), sep=sep, decimal=",", thousands=".")
+        return _read_decimal_comma(text, sep)
     return pd.read_csv(io.StringIO(text), sep=sep)
+
+
+def _read_decimal_comma(text: str, sep: str) -> pd.DataFrame:
+    """
+    pandas drops every "." once thousands="." is set, so the dd.mm.yyyy dates
+    these exports carry became integers (01.02.2024 → 1022024) and versions
+    like 1.10 became 110. Keep a parsed column only if every value really is
+    a European number; otherwise keep the text as written.
+    """
+    df = pd.read_csv(io.StringIO(text), sep=sep, decimal=",", thousands=".")
+    raw = pd.read_csv(io.StringIO(text), sep=sep, dtype=str)
+    for col in df.columns:
+        if not pd.api.types.is_numeric_dtype(df[col]) or pd.api.types.is_bool_dtype(df[col]):
+            continue
+        values = raw[col].dropna().str.strip()
+        if not values.str.fullmatch(_EU_NUMBER).all():
+            df[col] = raw[col]
+    return df
 
 
 def _decode(data: bytes) -> str:

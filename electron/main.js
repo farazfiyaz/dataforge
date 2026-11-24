@@ -7,18 +7,25 @@
  *  1. Spawn Ollama (if not already running) as a child process
  *  2. Spawn the FastAPI backend (Python) as a child process
  *  3. Wait until the backend is ready (polls /health)
- *  4. Open a native BrowserWindow pointing to http://localhost:8000
+ *  4. Open a native BrowserWindow on the backend (a free port, signed in with a per-launch token)
  *  5. Kill the backend + any Ollama instance we started, cleanly, on app quit
  */
 
-const { app, BrowserWindow, shell, Menu, nativeTheme } = require("electron");
-const path  = require("path");
-const http  = require("http");
-const os    = require("os");
+const { app, BrowserWindow, shell, Menu, nativeTheme, session } = require("electron");
+const path   = require("path");
+const http   = require("http");
+const net    = require("net");
+const os     = require("os");
+const crypto = require("crypto");
 const { spawn } = require("child_process");
 
-const PORT        = 8000;
-const BACKEND_URL = `http://localhost:${PORT}`;
+// Set in startBackend: a free port and a secret, new every launch. The backend
+// refuses /api requests without the secret (other programs on this computer
+// don't have it), and proves it knows it on /health, so a program squatting on
+// the port can't pose as DataForge.
+let PORT        = 0;
+let BACKEND_URL = "";
+const TOKEN     = crypto.randomBytes(32).toString("base64url");
 const OLLAMA_URL  = "http://localhost:11434";
 const MAX_WAIT_MS = 30_000;   // 30 seconds before giving up
 const POLL_MS     = 500;
@@ -181,7 +188,22 @@ async function ensureModelReady() {
 }
 
 // ── 1. Start FastAPI backend ──────────────────────────────────────────────────
-function startBackend() {
+// Ask the OS for a port nobody is using right now
+function getFreePort() {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.unref();
+    srv.on("error", reject);
+    srv.listen(0, "127.0.0.1", () => {
+      const { port } = srv.address();
+      srv.close(() => resolve(port));
+    });
+  });
+}
+
+async function startBackend() {
+  PORT = await getFreePort();
+  BACKEND_URL = `http://127.0.0.1:${PORT}`;
   // Resolve paths — works both in dev (project root) and packaged (extraResources)
   const isPackaged = app.isPackaged;
   const root = isPackaged
@@ -200,7 +222,10 @@ function startBackend() {
 
   backendProc = spawn(pythonBin, [appScript], {
     cwd: backendDir,
-    env: { ...process.env, PYTHONUNBUFFERED: "1", DATAFORGE_MODEL: MODEL },
+    env: {
+      ...process.env, PYTHONUNBUFFERED: "1", DATAFORGE_MODEL: MODEL,
+      DATAFORGE_PORT: String(PORT), DATAFORGE_TOKEN: TOKEN,
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -216,9 +241,20 @@ function waitForBackend() {
   return new Promise((resolve, reject) => {
     const start = Date.now();
     const check = () => {
-      http.get(`${BACKEND_URL}/health`, res => {
-        if (res.statusCode === 200) return resolve();
-        retry();
+      // Only our backend knows TOKEN, so only it can answer the challenge
+      const nonce = crypto.randomBytes(16).toString("hex");
+      const expected = crypto.createHmac("sha256", TOKEN).update(nonce).digest("hex");
+      http.get(`${BACKEND_URL}/health?nonce=${nonce}`, res => {
+        let raw = "";
+        res.on("data", d => raw += d);
+        res.on("end", () => {
+          let proof = "";
+          try { proof = JSON.parse(raw).proof || ""; } catch {}
+          if (res.statusCode === 200 && proof.length === expected.length &&
+              crypto.timingSafeEqual(Buffer.from(proof), Buffer.from(expected))) return resolve();
+          if (res.statusCode === 200) console.error("[DataForge] Something else answered on the backend port; waiting for ours.");
+          retry();
+        });
       }).on("error", retry);
     };
     const retry = () => {
@@ -230,7 +266,13 @@ function waitForBackend() {
 }
 
 // ── 3. Create the window ──────────────────────────────────────────────────────
-function createWindow() {
+async function createWindow() {
+  // The window's ticket to the API. HttpOnly: page script never sees it.
+  // No expiry: it lives in memory only and dies with the app.
+  await session.defaultSession.cookies.set({
+    url: BACKEND_URL, name: "df_session", value: TOKEN, httpOnly: true, sameSite: "strict",
+  });
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -242,6 +284,8 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
     },
     // Remove default menu bar (feels more like an app)
     autoHideMenuBar: true,
@@ -255,10 +299,31 @@ function createWindow() {
     mainWindow.webContents.send("df:model-status", lastModelStatus);
   });
 
-  // Open external links in the system browser, not inside the app
+  // Open external web links in the system browser, not inside the app. Only
+  // http(s): links come from web search results, and other schemes (file:,
+  // ms-*, custom protocol handlers) can launch programs.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
     return { action: "deny" };
+  });
+
+  // The window only ever shows DataForge itself
+  const stayHome = (event, url) => {
+    if (new URL(url).origin !== BACKEND_URL) event.preventDefault();
+  };
+  mainWindow.webContents.on("will-navigate", stayHome);
+  mainWindow.webContents.on("will-redirect", stayHome);
+
+  // Chat history is saved by the backend (encrypted) a moment after each
+  // change; let a pending save finish before the window goes away
+  let flushed = false;
+  mainWindow.on("close", event => {
+    if (flushed) return;
+    event.preventDefault();
+    flushed = true;
+    const giveUp = new Promise(resolve => setTimeout(resolve, 3000));
+    Promise.race([mainWindow.webContents.executeJavaScript("flushDB()").catch(() => {}), giveUp])
+      .finally(() => mainWindow?.close());
   });
 
   mainWindow.on("closed", () => { mainWindow = null; });
@@ -289,7 +354,10 @@ function buildMenu() {
         { role: "zoomIn" }, { role: "zoomOut" }, { role: "resetZoom" },
         { type: "separator" },
         { role: "togglefullscreen" },
-        { label: "Developer Tools", accelerator: "CmdOrCtrl+Shift+I", click: () => mainWindow?.webContents.openDevTools() },
+        // A dev tool, not for installed builds: its console can call the API as the window
+        ...(app.isPackaged ? [] : [
+          { label: "Developer Tools", accelerator: "CmdOrCtrl+Shift+I", click: () => mainWindow?.webContents.openDevTools() },
+        ]),
       ],
     },
   ];
@@ -303,11 +371,10 @@ app.whenReady().then(async () => {
   // Don't block backend/window startup on this — the UI shows a status banner
   // (via df:model-status) while it settles, possibly including a first-run download.
   waitForOllama().then(ok => { if (ok) ensureModelReady(); });
-  startBackend();
-
   try {
+    await startBackend();
     await waitForBackend();
-    createWindow();
+    await createWindow();
   } catch (err) {
     console.error("[DataForge] Fatal:", err.message);
     app.quit();

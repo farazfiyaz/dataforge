@@ -25,8 +25,10 @@ pd.set_option("display.max_columns", 40)
 import matplotlib.pyplot as plt
 from typing import Any
 
+from services import codeguard
 from services.chartsummary import describe_figure
 from services.datastore import get_dataset
+from services.eda import table_records
 from services.ml import train_model
 from services.workspace import list_files, load_file
 
@@ -38,7 +40,7 @@ except ImportError:      # seaborn optional — sandbox still works without it
 # Libraries generated code is allowed to import (root package names)
 _ALLOWED_IMPORT_ROOTS = {
     "math", "statistics", "datetime", "re", "json", "itertools", "collections",
-    "functools", "random", "textwrap", "io",
+    "functools", "random", "textwrap",
     "numpy", "pandas", "matplotlib", "seaborn", "scipy", "sklearn", "plotly",
 }
 
@@ -64,7 +66,7 @@ SAFE_GLOBALS = {
         "isinstance": isinstance, "type": type, "repr": repr,
         "all": all, "any": any, "divmod": divmod, "pow": pow, "format": format,
         "frozenset": frozenset, "complex": complex, "iter": iter, "next": next,
-        "slice": slice, "getattr": getattr, "hasattr": hasattr, "callable": callable,
+        "slice": slice, "hasattr": hasattr, "callable": callable,
         "__import__": _safe_import,
         # exceptions so generated code can use try/except
         "Exception": Exception, "ValueError": ValueError, "KeyError": KeyError,
@@ -192,62 +194,74 @@ def run_code(
     keys_before = set(local_ns.keys())
 
     try:
-        plt.close("all")   # drop any figures left over from a previous run — keeps memory flat across a long session
-        body, last_expr = _split_last_expression(code)
-        namespace = {**SAFE_GLOBALS, **local_ns}
-        sys.settrace(_deadline_tracer(time.monotonic() + EXEC_TIMEOUT_S, EXEC_TIMEOUT_S))
-        try:
-            exec(body, namespace, local_ns)  # noqa: S102
-            last_value = eval(last_expr, namespace, local_ns) if last_expr else None  # noqa: S307
-        finally:
-            sys.settrace(old_trace)
-        if (shown := _echo(last_value)) is not None:
-            print(shown)
-
-        result["stdout"] = stdout_capture.getvalue()
-
-        # A DataFrame the code ended on is what the user asked to see
-        if isinstance(last_value, pd.DataFrame):
-            result["table"] = last_value.head(100).fillna("").to_dict(orient="records")
-
-        # Otherwise prefer a DataFrame assigned in THIS run; fall back to any DataFrame
-        new_keys = [k for k in local_ns.keys() if k not in keys_before]
-        scan = list(reversed(new_keys)) or list(reversed(list(local_ns.keys())))
-        for key in scan if result["table"] is None else []:
-            val = local_ns[key]
-            if isinstance(val, pd.DataFrame):
-                result["table"] = val.head(100).fillna("").to_dict(orient="records")
-                break
-
-        # Encode EVERY figure the code drew, not just the last one — code that
-        # plots more than once per run (e.g. train_model's diagnostics figure
-        # followed by an extra chart) used to lose all but the final figure.
-        charts, summaries = [], []
-        for num in plt.get_fignums():
-            fig = plt.figure(num)
-            if not fig.get_axes():
-                continue
-            buf = io.BytesIO()
-            fig.savefig(buf, format="png", bbox_inches="tight")
-            buf.seek(0)
-            charts.append(base64.b64encode(buf.read()).decode())
+        # Style changes (plt.style.use, sns.set_theme, rcParams[...] = ...) last
+        # for this run only; they used to stick to every later chart in the app.
+        with matplotlib.rc_context():
+            plt.close("all")   # drop any figures left over from a previous run — keeps memory flat across a long session
+            body, last_expr = _split_last_expression(code)
+            # fresh builtins dict per run: code can't plant something in the
+            # shared one that every later run (and session) would pick up
+            namespace = {**SAFE_GLOBALS, "__builtins__": dict(SAFE_GLOBALS["__builtins__"]), **local_ns}
+            sys.settrace(_deadline_tracer(time.monotonic() + EXEC_TIMEOUT_S, EXEC_TIMEOUT_S))
             try:
-                summaries.append(describe_figure(fig))   # after savefig: tick labels exist now
-            except Exception:
-                summaries.append("")
-        plt.close("all")
+                exec(body, namespace, local_ns)  # noqa: S102
+                last_value = eval(last_expr, namespace, local_ns) if last_expr else None  # noqa: S307
+            finally:
+                sys.settrace(old_trace)
+            if (shown := _echo(last_value)) is not None:
+                print(shown)
 
-        if charts:
-            result["charts"] = charts
-            result["chart_summaries"] = summaries
-            result["chart"] = charts[0]   # back-compat: first chart for older consumers
+            result["stdout"] = stdout_capture.getvalue()
 
+            # A DataFrame the code ended on is what the user asked to see
+            if isinstance(last_value, pd.DataFrame):
+                result["table"] = table_records(last_value, 100)
+
+            # Otherwise prefer a DataFrame assigned in THIS run; fall back to any DataFrame
+            new_keys = [k for k in local_ns.keys() if k not in keys_before]
+            scan = list(reversed(new_keys)) or list(reversed(list(local_ns.keys())))
+            for key in scan if result["table"] is None else []:
+                val = local_ns[key]
+                if isinstance(val, pd.DataFrame):
+                    result["table"] = table_records(val, 100)
+                    break
+
+            # Encode EVERY figure the code drew, not just the last one — code that
+            # plots more than once per run (e.g. train_model's diagnostics figure
+            # followed by an extra chart) used to lose all but the final figure.
+            charts, summaries = [], []
+            for num in plt.get_fignums():
+                fig = plt.figure(num)
+                if not fig.get_axes():
+                    continue
+                buf = io.BytesIO()
+                fig.savefig(buf, format="png", bbox_inches="tight")
+                buf.seek(0)
+                charts.append(base64.b64encode(buf.read()).decode())
+                try:
+                    summaries.append(describe_figure(fig))   # after savefig: tick labels exist now
+                except Exception:
+                    summaries.append("")
+            plt.close("all")
+
+            if charts:
+                result["charts"] = charts
+                result["chart_summaries"] = summaries
+                result["chart"] = charts[0]   # back-compat: first chart for older consumers
+
+
+    except codeguard.SandboxViolation as e:
+        result["error"] = f"SandboxViolation: {e}"
     except ExecutionTimeout as e:
         result["stdout"] = stdout_capture.getvalue()
         result["error"] = f"ExecutionTimeout: {e}"
         plt.close("all")
     except Exception:
+        # keep what printed before the error: the model fixes one line instead
+        # of re-running (and re-guessing) everything it had already seen
+        result["stdout"] = stdout_capture.getvalue()
         result["error"] = traceback.format_exc()
+        plt.close("all")
     finally:
         sys.stdout = old_stdout
 
@@ -257,6 +271,19 @@ def run_code(
 MAX_ECHO_CHARS = 4000
 
 
+class _BareExceptToException(ast.NodeTransformer):
+    """
+    Rewrite `except:` as `except Exception:`. A bare except catches
+    ExecutionTimeout, and CPython drops the trace hook once it raises, so
+    `while True: try: ... except: pass` used to run forever.
+    """
+    def visit_ExceptHandler(self, node: ast.ExceptHandler):
+        self.generic_visit(node)
+        if node.type is None:
+            node.type = ast.copy_location(ast.Name(id="Exception", ctx=ast.Load()), node)
+        return node
+
+
 def _split_last_expression(code: str):
     """
     Notebook semantics: if the code ends with a bare expression (`df.head()`),
@@ -264,7 +291,7 @@ def _split_last_expression(code: str):
     write notebook-style code constantly; without this they get empty output
     back and repeat themselves.
     """
-    tree = ast.parse(code, SANDBOX_FILENAME)
+    tree = codeguard.check(_BareExceptToException().visit(ast.parse(code, SANDBOX_FILENAME)))
     if not tree.body or not isinstance(tree.body[-1], ast.Expr):
         return compile(tree, SANDBOX_FILENAME, "exec"), None
     last = tree.body.pop()

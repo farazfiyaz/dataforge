@@ -16,6 +16,7 @@ from routers.agent import _helper_call_as_code, _text_tool_calls
 
 CODE = "x = 6 * 7\nprint(x)"
 CALL = {"name": "run_python", "arguments": {"code": CODE}}
+DATA = "a,b\n1,2\n"   # the agent refuses to run without any data
 
 
 @pytest.mark.parametrize("content", [
@@ -69,9 +70,9 @@ def test_agent_runs_a_text_tool_call_then_answers(client, monkeypatch):
         return next(replies)
     monkeypatch.setattr(agent_router, "chat_ollama", fake_llm)
 
-    res = client.post("/api/agent/", json={"message": "what is 6*7?"}, headers={"Origin": APP_ORIGIN})
+    res = client.post("/api/agent/", json={"message": "what is 6*7?", "csv_data": DATA}, headers={"Origin": APP_ORIGIN})
     events = _events(res)
-    kinds = [e for e, _ in events]
+    kinds = [e for e, _ in events if e != "recommendations"]
     assert kinds == ["start", "code", "result", "final"]
     assert events[2][1]["stdout"].strip() == "42"
     assert events[3][1]["content"] == "The answer is 42."
@@ -137,8 +138,8 @@ def test_agent_corrects_an_unknown_tool(client, monkeypatch):
         {"role": "assistant", "content": json.dumps(CALL)},
         {"role": "assistant", "content": "Done: 42."},
     ])
-    res = client.post("/api/agent/", json={"message": "go"}, headers={"Origin": APP_ORIGIN})
-    assert [e for e, _ in _events(res)] == ["start", "code", "result", "final"]
+    res = client.post("/api/agent/", json={"message": "go", "csv_data": DATA}, headers={"Origin": APP_ORIGIN})
+    assert [e for e, _ in _events(res) if e != "recommendations"] == ["start", "code", "result", "final"]
     assert "only tool is run_python" in feedback[0]
 
 
@@ -153,9 +154,9 @@ def test_python_blocks_run_when_nothing_has_run_yet(client, monkeypatch):
         {"role": "assistant", "content": plan},
         {"role": "assistant", "content": answer},
     ])
-    res = client.post("/api/agent/", json={"message": "go"}, headers={"Origin": APP_ORIGIN})
+    res = client.post("/api/agent/", json={"message": "go", "csv_data": DATA}, headers={"Origin": APP_ORIGIN})
     events = _events(res)
-    assert [e for e, _ in events] == ["start", "code", "result", "final"]
+    assert [e for e, _ in events if e != "recommendations"] == ["start", "code", "result", "final"]
     assert events[2][1]["stdout"].strip() == "42"
     assert "Example" in events[3][1]["content"]   # code in the final answer is not re-run
 
@@ -203,9 +204,9 @@ def test_python_block_after_a_failed_step_is_run_as_the_fix(client, monkeypatch)
         {"role": "assistant", "content": f"Let's update the code to avoid that:\n{FENCE}python\nprint(6 * 7)\n{FENCE}"},
         {"role": "assistant", "content": "It's 42."},
     ])
-    res = client.post("/api/agent/", json={"message": "go"}, headers={"Origin": APP_ORIGIN})
+    res = client.post("/api/agent/", json={"message": "go", "csv_data": DATA}, headers={"Origin": APP_ORIGIN})
     events = _events(res)
-    assert [e for e, _ in events] == ["start", "code", "result", "code", "result", "final"]
+    assert [e for e, _ in events if e != "recommendations"] == ["start", "code", "result", "code", "result", "final"]
     assert events[2][1]["error"] and events[4][1]["stdout"].strip() == "42"
 
 

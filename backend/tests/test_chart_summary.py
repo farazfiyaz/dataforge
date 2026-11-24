@@ -79,6 +79,45 @@ def test_box_plots_report_whiskers_and_outliers(draw):
     assert "line:" not in text                   # no segment-by-segment noise
 
 
+def test_single_box_reports_median_and_middle_half():
+    text = _describe(lambda: sns.boxplot(y=TICKETS))
+    assert "median 1, middle 50% 1–2" in text
+
+
+PLANS = pd.DataFrame({
+    "plan": ["basic"] * 7 + ["pro"] * 7 + ["enterprise"] * 7,
+    "charges": [10, 11, 12, 13, 14, 15, 60] + [20, 22, 24, 26, 28, 30, 32] + [40, 41, 42, 43, 44, 45, 46],
+})
+GROUPED = ("box plot, 3 boxes: basic: median 13, middle 50% 11.5–14.5, whiskers 10–15, outliers 60; "
+           "pro: median 26, middle 50% 23–29, whiskers 20–32; "
+           "enterprise: median 43, middle 50% 41.5–44.5, whiskers 40–46")
+
+
+@pytest.mark.parametrize("draw", [
+    lambda: sns.boxplot(data=PLANS, x="plan", y="charges"),
+    lambda: sns.boxplot(data=PLANS, x="charges", y="plan"),
+    lambda: plt.boxplot([PLANS.charges[PLANS.plan == p] for p in ("basic", "pro", "enterprise")],
+                        tick_labels=["basic", "pro", "enterprise"]),
+])
+def test_grouped_box_plots_are_summarised_per_box(draw):
+    # One combined "5.35 to 46" span didn't say which plan was higher.
+    assert GROUPED in _describe(draw)
+
+
+def test_pandas_grouped_box_plot_uses_its_own_order():
+    text = _describe(lambda: PLANS.boxplot(column="charges", by="plan"))
+    assert "basic: median 13" in text and "enterprise: median 43" in text and "pro: median 26" in text
+
+
+def test_hue_box_plots_name_category_and_hue():
+    df = pd.DataFrame({"churn": ["no"] * 8 + ["yes"] * 8,
+                       "plan": (["basic"] * 4 + ["pro"] * 4) * 2,
+                       "tenure": [50, 52, 54, 56, 40, 42, 44, 46, 10, 12, 14, 16, 20, 22, 24, 26]})
+    text = _describe(lambda: sns.boxplot(data=df, x="churn", y="tenure", hue="plan"))
+    assert "box plot, 4 boxes: no / basic: median 53" in text
+    assert "no / pro: median 43" in text and "yes / basic: median 13" in text and "yes / pro: median 23" in text
+
+
 def test_correlation_heatmap_names_strongest_pairs():
     corr = pd.DataFrame([[1, 0.9, -0.2], [0.9, 1, 0.1], [-0.2, 0.1, 1]],
                         index=list("abc"), columns=list("abc"))

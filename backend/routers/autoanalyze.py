@@ -34,6 +34,9 @@ async def autoanalyze(file: UploadFile = File(...)):
 
     # 1. EDA on original
     profile = run_eda(df_original)
+    # rows the loader dropped for having more fields than the header
+    if df_original.attrs.get("skipped_lines"):
+        profile["skipped_lines"] = df_original.attrs["skipped_lines"]
 
     # 2. Auto-clean
     df_cleaned, cleaning_report = auto_clean(df_original)

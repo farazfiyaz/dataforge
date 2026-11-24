@@ -1715,6 +1715,15 @@ function renderEdaResponse(turn, profile, filename, fileObj) {
   intro.textContent = `Profile of ${filename || "your file"}.`;
   turn.appendChild(intro);
 
+  const skipped = profile.skipped_lines || [];
+  if (skipped.length) {
+    const shown = skipped.slice(0, 5).join(", ") + (skipped.length > 5 ? `, and ${skipped.length - 5} more` : "");
+    const note = document.createElement("div");
+    note.className = "msg-body";
+    note.textContent = `Skipped ${skipped.length === 1 ? "1 row" : `${skipped.length} rows`} with more values than the header (line${skipped.length > 1 ? "s" : ""} ${shown}). Check the file for a stray comma or an unquoted separator.`;
+    turn.appendChild(note);
+  }
+
   const readings = document.createElement("div");
   readings.className = "profile";
   readings.innerHTML = `

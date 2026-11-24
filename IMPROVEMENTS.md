@@ -138,6 +138,7 @@ A **Model** button chooses who answers:
 `services/claude.py` translates the agent's Ollama-style conversation to the Messages API
 and back, echoing Claude's raw blocks (thinking included) unchanged. Opus 5 uses
 server-side refusal fallbacks. Errors (bad key, rate limit, offline) become plain messages.
+
 ### 2026-09-28 — "No file attached" message and a Stop button
 - With no file attached, general questions ("what is a p-value?", "write code for
   a moving average") are answered normally, in any mode, with no code execution.
@@ -159,6 +160,7 @@ facts and news aren't "your data", and with search on it includes today's date.
 Live (qwen2.5-coder:7b): "latest pandas version" searched and answered 3.0.6; "what is a
 p-value" answered without searching; "churn rate in my data" asked for a file. The
 7B model still searched "2022 World Cup" for "most recent World Cup" despite the date.
+
 ### 2026-09-30 — Download buttons, tables in answers, auto-save to Documents\DataForge
 - Every chart has **Download PNG**; every result table (and table in an answer) has **Download CSV**.
 - Answers render Markdown tables as real tables, and the model is told to use tables
@@ -168,6 +170,7 @@ p-value" answered without searching; "churn rate in my data" asked for a file. T
   note. Only tables made in that step are saved (not the unchanged dataset every step).
   The files are the user's to delete: the folder is recreated on the next save, and a
   failed save is skipped, never an error. Folder: `DATAFORGE_OUTPUT_DIR`.
+
 ### 2026-09-28 — Describe each box in a grouped box plot
 "Compare monthly_bill across plans" as a box plot was described to the model as
 one combined span ("boxes and whiskers span 3.04 to 124.5"), so it couldn't say
@@ -176,6 +179,7 @@ which plan was higher. Box plots (seaborn, pandas `df.boxplot(by=...)`,
 middle 50%, whiskers and that box's outliers, named by category. Seaborn `hue`
 boxes are named "category / hue" from the legend. Single boxes also get their
 median. On the demo data every median and quartile matches pandas exactly.
+
 ### 2026-09-28 — European CSVs: dates stay dates, not huge integers
 Semicolon files with decimal commas are read with `thousands="."`, and pandas
 then drops every dot, so German-Excel-style dates silently became numbers
@@ -183,6 +187,7 @@ then drops every dot, so German-Excel-style dates silently became numbers
 became `110`. The agent would happily average them. The loader now keeps a
 parsed column only if every value is a well-formed European number (dots only
 between groups of three digits); other columns keep their original text.
+
 ### 2026-09-28 — A bare `except:` can no longer swallow the time limit
 The sandbox's `ExecutionTimeout` is a BaseException, so `except Exception:`
 can't catch it, but a bare `except:` can. `try: while True: pass / except: print('caught')`
@@ -190,6 +195,7 @@ ran for 0.5s, printed "caught" and reported success. `while True: try: ... excep
 hung past the limit (killed after 20s with a 0.5s limit): once the trace hook
 raises, CPython removes it. The sandbox now compiles bare `except:` as
 `except Exception:`, which still catches every ordinary error.
+
 ### 2026-09-28 — Upload no longer crashes on True/False columns or Excel year headers
 Two common file shapes returned a 500 error:
 - **Any True/False column** (e.g. `paid,True`): pandas counts bool as numeric, so
@@ -200,6 +206,7 @@ Two common file shapes returned a 500 error:
   column names, and Auto Analyze crashed joining them into the cleaning report
   and again when labelling the missing-values plot. Excel headers are now text,
   the same as a CSV with the same header.
+
 ### 2026-09-29 — Upload size limit
 `/api/upload` and `/api/autoanalyze` read the whole file into memory with
 `await file.read()`, and parsing needs several times that again (decoded text,
@@ -207,6 +214,7 @@ then the DataFrame). A multi-gigabyte CSV could exhaust a laptop's RAM and
 freeze the app with no message. Uploads are now read in 1 MB chunks and stopped
 at 200 MB (`DATAFORGE_MAX_UPLOAD_MB` to change it) with a 413 that names the
 file, the limit, and what to do. The existing frontend shows that message as-is.
+
 ### 2026-09-29 — train_model no longer crashes on 1/2 labels or rare classes
 `train_model` decided "binary" from the test split and called `roc_curve`
 without a positive label. Two common cases crashed after printing metrics:
@@ -218,6 +226,7 @@ Binary is now judged from the model's own classes, `roc_curve` gets
 `pos_label`, and the confusion matrix is built over every class seen, so the
 matrix and its tick labels always match. New `tests/test_model_report.py`
 (both tests fail without the fix).
+
 ### 2026-09-29 — Auto clean handles CSVs written with ", " separators
 In a file like `id, plan, age` every header and cell starts with a space. Auto
 clean trimmed cells only at the end, after the other steps had already run, so
@@ -229,6 +238,7 @@ whitespace-only cells count as missing, and numeric text is converted before
 nulls and duplicates are handled. A header is not trimmed if that would give it
 the same name as another column. New `tests/test_cleaner_padded_csv.py`: 5 of
 its 6 tests failed before the fix.
+
 ### 2026-09-29 — Don't crash on infinite values
 A CSV with `inf` in it (a spreadsheet's `#DIV/0!` saved as text, or a ratio
 column) made `/api/upload` and `/api/autoanalyze` answer 500: `inf` isn't valid
@@ -239,6 +249,7 @@ draw histograms over a range reaching `inf`. The same went for code results:
 can't parse. Tables and samples now show `"inf"` / `"-inf"` as text
 (`eda.table_records`), and Auto Analyze's histograms, box plots and heatmap
 leave infinite values out. The data itself is unchanged.
+
 ### 2026-09-30 — Tell the agent True/False columns are booleans, not text
 The schema described a True/False column as `text, 2 values: 'False', 'True'`.
 Those cells are real booleans (dtype `bool`, or `object` when some are blank), so
@@ -248,6 +259,7 @@ the model wrote `(s == 'True').mean()`, got 0.0 for every group, and answered
 `empty (all N values missing)` instead of `numeric (float64), range nan to nan`.
 Live: "What percentage of customers are active, per plan?" went from 0%/0% to
 32.63%/37.63%, matching pandas exactly.
+
 ### 2026-09-30 — Clear error for files with headers but no rows
 A CSV or Excel file with only a header row (an export whose filter matched
 nothing, or an empty template) made upload and Auto Analyze answer a bare 500.
@@ -256,6 +268,7 @@ the browser then failed to parse the error body. `read_table` now rejects it
 with a 400: "The file has column headers (3) but no data rows." A workbook with
 a blank sheet says "The file is empty." The agent's workspace `load_file` gets
 the same message.
+
 ### 2026-09-30 — Workspace `load_file` accepts the agent's pandas options
 Sniffing only ran when `load_file` got no options. With any keyword, CSVs went to a
 bare `pd.read_csv` with a forced `sep`, so `load_file("x.csv", sep=";")` raised
@@ -263,6 +276,7 @@ bare `pd.read_csv` with a forced `sep`, so `load_file("x.csv", sep=";")` raised
 a sep and a delimiter", and `usecols=`/`nrows=` on an Excel-on-Windows (cp1252) file
 raised `UnicodeDecodeError`. Now the caller's `sep`/`delimiter`/`encoding` win, and
 whatever they leave out is still sniffed. Tests in `test_workspace_load_file.py`.
+
 ### 2026-09-30 — Explain Ollama crashes and out-of-memory in words
 Only "not running", "too slow" and "model missing" were translated. Other
 failures leaked raw text: a 500 showed `Ollama returned an error (500):
@@ -273,6 +287,7 @@ modes), and a non-JSON reply raised a JSON decode error. Now: out of memory says
 so and says to close other apps, other errors show Ollama's own message without
 JSON, dropped connections say Ollama stopped answering, and a garbled reply is an
 OllamaError (503). Tests in `test_llm_errors.py`.
+
 ### 2026-10-01 — Keep follow-up suggestions after the agent reshapes `df`
 Suggestions after an agent answer are built from the session's `df` as the agent
 left it. If a step added a list column (`df["words"] = df["text"].str.split()`)
@@ -280,6 +295,7 @@ or a duplicate column name (`pd.concat([df, df[["plan"]]], axis=1)`), every rule
 raised (`unhashable type: 'list'`, "truth value of a Series is ambiguous"), the
 error was swallowed, and the suggestions silently vanished. `recommend()` now
 keeps the first column of each name and skips columns whose values can't be counted.
+
 ### 2026-10-01 — Result tables with bins, dates or grouped columns no longer break runs
 The sandbox turned result DataFrames into table rows with `fillna("")`, which caused two bugs:
 - **A binned column poisoned the session.** `pd.cut` leaves gaps for out-of-range
@@ -291,6 +307,7 @@ The sandbox turned result DataFrames into table rows with `fillna("")`, which ca
 Tables are now built from plain values (dates, intervals and tuple column names
 as text, blanks for gaps), and a table that still can't be built is left out
 without failing the run. Tests: `tests/test_result_tables.py` (3 of 4 fail on the old code).
+
 ### 2026-10-01 — train_model on binned (categorical) targets
 "Predict the tenure group" leads the agent to `pd.cut` a column and train on it.
 `train_model` crashed with sklearn's "Unknown label type: unknown" because the
@@ -298,6 +315,7 @@ labels were `Interval` objects. Named bins (`labels=["new", "mid", "loyal"]`)
 trained, but the confusion matrix sorted them alphabetically, and a categorical
 with more than 10 numeric categories was treated as regression. Categorical
 targets are now always classification, encoded in the categories' own order.
+
 ### 2026-10-01 — Describe grouped bars and pie charts to the model
 "Churn by plan" is usually drawn as `groupby(['plan','churn']).size().unstack().plot.bar()`
 or `sns.countplot(x='plan', hue='churn')`. Those bars sit beside their tick, so the
@@ -307,6 +325,7 @@ a constant from the ticks takes the tick labels (histograms are unaffected),
 unnamed seaborn series take their legend names, and pies list each slice's share:
 `bars 'no': basic=308, enterprise=133, pro=304; bars 'yes': basic=420, …` and
 `pie, 3 slices: basic 48.5%, pro 36.3%, enterprise 15.1%`.
+
 ### 2026-10-02 — Chart styles no longer leak between sandbox runs
 Matplotlib's style is global to the process, and the sandbox never reset it. The
 agent prompt asks for `plt.style.use('dark_background')`, so after the first
@@ -317,6 +336,7 @@ executes inside `matplotlib.rc_context()`. A style still applies to the charts
 of the run that sets it, and is restored afterwards, including after errors and
 timeouts. Trade-off: a style set in one agent step no longer carries over to the
 next step of the same session.
+
 ### 2026-10-02 — Auto Analyze: no ID charts, and charts for True/False columns
 Auto Analyze's "Top Values" charts used the first six text columns as they came.
 A text identifier (`order_id` = "A-1001", an email column) became a chart of ten
@@ -325,6 +345,7 @@ already skipped. True/False columns, often the outcome itself (`churned`), got n
 chart at all, since they count as neither text nor numeric. Now ID columns and
 all-unique columns are skipped, bool columns are charted, charts follow the
 file's column order, and the six-chart cap counts only charts that are drawn.
+
 ### 2026-10-02 — Keep output printed before an error
 When sandbox code failed partway, everything it had printed was thrown away:
 `print(df.shape)` followed by a bad `df['nope']` came back as only a KeyError,
@@ -333,18 +354,21 @@ re-guessed) steps it had already done. The sandbox now keeps stdout on errors,
 the agent passes it to the model as `stdout_before_error`, and the failed step
 shows it under "Output before the error". Leftover figures from the failed run
 are closed too.
+
 ### 2026-10-02 — Describe seaborn barplot error bars as error bars
 `sns.barplot` (the usual "mean X per group" chart) draws its 95% CI as one
 2-point line per bar. The chart summary read four or more of those as a box
 plot ("box plot: boxes and whiskers span 43.85 to 54.41"), and three as
 unnamed "line: 2 points" entries. They're now matched to their bars and
 reported as "error bars: team 47.33–51.8, enterprise 45.44–51.17, …".
+
 ### 2026-10-03 — Run fenced code inside a run_python call
 Models often write the `code` argument the way they'd write a chat reply,
 wrapped in a markdown fence, sometimes with a line of prose around it. The sandbox ran that text
 as-is and hit `SyntaxError` on line 1 (the opening fence). The agent now unwraps a fenced
 argument, whether native or text tool call, before running and showing it. Code that
 already parses is left alone, so a fence inside a string still works.
+
 ### 2026-10-03 — Each chat keeps its own dataset and agent kernel
 The agent session id was one global, and a saved chat kept only the file's name
 and profile. So "New chat" kept talking to the previous chat's kernel (its `df`
@@ -356,6 +380,7 @@ session and data. The frontend now keeps an in-memory map from chat to
 opened, and starts new chats and project pages with no session. `dataforge_db`
 is unchanged. The backend's dataset store is in memory too, so persisting the
 ids across restarts wouldn't help.
+
 ### 2026-10-03 — Profile date columns as dates, not categories
 The upload profile put every date column under `kind: "categorical"`: Excel
 dates (`datetime64`) and CSV text dates like `signup_date` alike. So the card
@@ -364,6 +389,7 @@ date came first the suggested chart was "Bar chart of top values in signup", one
 bar per day. Date columns (datetime dtype, or text named like a date that
 parses as one) now get `kind: "datetime"` with their min/max, and the card reads
 "1 numeric, 1 categorical, 1 date". `find_date_column` reuses the same check.
+
 ### 2026-10-03 — train_model accepts the argument names models actually write
 `train_model(df, "churn", features=["a", "churn"])` trained on the target itself
 and reported Accuracy/ROC AUC 1.000, a fake perfect score. `model="random_forest"`
@@ -374,6 +400,7 @@ Now common model and task names are mapped to the short keys ("xgboost" → `gb`
 a single feature can be passed as a string, and unknown names raise a
 `ValueError` that lists the valid options or columns, so the agent can fix its
 next step.
+
 ### 2026-10-04 — Workspace button opens a native folder picker
 The 📁 Workspace button asked for the folder with `window.prompt()`, which
 Electron doesn't implement. Probed in Electron 33.4.11, it throws "prompt() is
@@ -384,6 +411,16 @@ current workspace), exposed as `window.dataforge.pickFolder()` in the preload.
 The browser fallback still uses `prompt()`, and `set_workspace` now accepts a
 path pasted from Explorer's "Copy as path" (wrapped in quotes), which it used
 to reject as "not a folder".
+
+### 2026-10-05 — Survive a ragged CSV row
+A single row with an extra field (a stray comma, an unquoted separator) failed
+the whole upload with "C error: Expected 3 fields in line 3, saw 4". Worse, in a
+`;` or tab file it first made the delimiter sniffer pick `,`, so every column
+collapsed into one. Delimiter detection now prefers the separator that splits
+the header and most rows into the same number of fields, and rows with too many
+fields are dropped and listed in `df.attrs["skipped_lines"]`. `/api/upload` and
+`/api/autoanalyze` return them as `profile.skipped_lines`, and the profile says
+"Skipped 1 row with more values than the header (line 3)".
 
 ## Ideas / backlog
 - Executor sandbox: `getattr`/`type` in builtins allow classic `__subclasses__`

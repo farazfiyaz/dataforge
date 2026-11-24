@@ -10,6 +10,11 @@ which bar that was. This reads the plotted data back out of the figure:
 bar labels and heights, pie shares, line and scatter ranges, heatmap value ranges.
 """
 
+from datetime import datetime
+
+import matplotlib.dates as mdates
+import numpy as np
+import pandas as pd
 from matplotlib.collections import PathCollection, QuadMesh
 from matplotlib.container import BarContainer
 from matplotlib.patches import Wedge
@@ -46,7 +51,8 @@ def _describe_axes(ax) -> str:
     for coll in ax.collections:
         if isinstance(coll, PathCollection) and len(coll.get_offsets()):
             pts = coll.get_offsets()
-            items.append(f"scatter: {len(pts)} points, x {_f(pts[:, 0].min())}–{_f(pts[:, 0].max())}, "
+            items.append(f"scatter: {len(pts)} points, "
+                         f"x {_x_text(ax.xaxis, pts[:, 0].min())} to {_x_text(ax.xaxis, pts[:, 0].max())}, "
                          f"y {_f(pts[:, 1].min())}–{_f(pts[:, 1].max())}")
         elif isinstance(coll, QuadMesh):
             arr = coll.get_array()
@@ -95,8 +101,7 @@ def _lines(ax, skip=()) -> list[str]:
             continue
         name = line.get_label()
         name = "" if name.startswith("_") else f" '{name}'"
-        out.append(f"line{name}: {len(ys)} points, y from {_f(ys[0])} to {_f(ys[-1])} "
-                   f"(min {_f(min(ys))}, max {_f(max(ys))})")
+        out.append(f"line{name}: {len(ys)} points" + _line_extremes(ax, line, ys))
     return out
 
 
@@ -174,6 +179,47 @@ def _box_names(ax, positions, labels) -> list[str]:
 
 def _list(values, limit) -> str:
     return ", ".join(_f(v) for v in values[:limit]) + (" …" if len(values) > limit else "")
+
+
+def _line_extremes(ax, line, ys) -> str:
+    """
+    Range plus *where* the low and peak are, so "which month peaked?" can be
+    answered from a trend chart. x is shown as the axis shows it: dates,
+    periods (pandas time series), category labels or numbers.
+    """
+    plain = f", y from {_f(ys[0])} to {_f(ys[-1])} (min {_f(min(ys))}, max {_f(max(ys))})"
+    xs, raw_ys = line.get_xdata(), line.get_ydata()
+    if len(xs) != len(raw_ys):
+        return plain
+    kept = [i for i, y in enumerate(raw_ys) if _is_num(y)]   # same points as `ys`
+    if len(kept) != len(ys):
+        return plain
+    low = kept[min(range(len(ys)), key=ys.__getitem__)]
+    high = kept[max(range(len(ys)), key=ys.__getitem__)]
+    first, last, at_low, at_high = (_x_text(ax.xaxis, xs[i]) for i in (kept[0], kept[-1], low, high))
+    if None in (first, last, at_low, at_high):
+        return plain
+    return (f", x {first} to {last}, y from {_f(ys[0])} to {_f(ys[-1])} "
+            f"(min {_f(min(ys))} at {at_low}, max {_f(max(ys))} at {at_high})")
+
+
+def _x_text(axis, v):
+    """One x value as the axis shows it; None if it can't be shown (e.g. a missing date)."""
+    if isinstance(v, str):
+        return v
+    if isinstance(v, pd.Period):
+        return str(v)
+    if isinstance(v, (datetime, np.datetime64)):
+        return None if pd.isna(v) else _date(pd.Timestamp(v))
+    if not _is_num(v):
+        return None
+    if isinstance(axis.get_major_locator(), mdates.DateLocator):   # dates stored as day numbers
+        return _date(pd.Timestamp(mdates.num2date(float(v))).tz_localize(None))
+    return _f(v)
+
+
+def _date(ts) -> str:
+    return ts.strftime("%Y-%m-%d") if ts == ts.normalize() else ts.strftime("%Y-%m-%d %H:%M")
 
 
 def _strongest_cells(ax, arr) -> str:

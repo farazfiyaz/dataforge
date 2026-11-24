@@ -25,6 +25,10 @@ _workspace_root: Path | None = None
 def set_workspace(path: str) -> dict:
     """Set the workspace root folder. Returns info about it."""
     global _workspace_root
+    # Windows Explorer's "Copy as path" wraps the path in double quotes
+    path = path.strip().strip('"').strip("'").strip()
+    if not path:
+        raise ValueError("no folder given")
     p = Path(path).expanduser().resolve()
     if not p.is_dir():
         raise ValueError(f"not a folder: {path}")

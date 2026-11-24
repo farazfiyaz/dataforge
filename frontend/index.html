@@ -144,6 +144,13 @@ button { cursor: pointer; }
 }
 .chat-item:hover { background: var(--field-hover); }
 .chat-item.active { background: var(--field-ink); color: var(--field); font-weight: 600; }
+/* a reply still being worked on in that chat */
+.chat-item .chat-busy {
+  display: inline-block; width: 7px; height: 7px; margin-left: 8px; vertical-align: middle;
+  border-radius: 50%; background: currentColor; animation: chat-busy 1.2s ease-in-out infinite;
+}
+@keyframes chat-busy { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .chat-item .chat-busy { animation: none; } }
 .project-empty { padding: 4px 12px 8px; font-size: 13px; color: var(--field-ink-2); }
 
 .sidebar-footer {
@@ -834,10 +841,53 @@ let state = {
   chatId: null,
   file: null,       // { name, csvRaw, profile, fileObj }
   messages: [],     // [{role, parts}]  parts = array of {type, content}
-  streaming: false,
   agentSessionId: null,  // persistent agent kernel id (server-side namespace)
-  abort: null,      // AbortController of the request in progress (Stop button)
 };
+
+// Replies in progress, one per chat: { abort, turns, msgStart }. A run belongs
+// to the chat it started in, not to whatever is on screen, so switching chats
+// leaves it working in the background. `turns` are its live DOM nodes: they
+// keep updating while detached and are put back when the chat is reopened.
+// `msgStart` is where its saved messages begin, so reopening doesn't show them twice.
+const runs = new Map();
+function runningHere() { return runs.has(state.chatId); }
+function currentChat() { return findProject(state.projectId)?.chats.find(c => c.id === state.chatId) || null; }
+
+function beginRun(ctx) {
+  const run = { abort: new AbortController(), turns: [], msgStart: ctx.chat.messages.length };
+  runs.set(ctx.chatId, run);
+  updateSendBtn();
+  renderSidebar();
+  return run;
+}
+function endRun(ctx) {
+  runs.delete(ctx.chatId);
+  updateSendBtn();
+  renderSidebar();
+}
+// A reply turn for this run: on screen only if its chat is the one being viewed
+function addRunTurn(ctx) {
+  const turn = document.createElement("div");
+  turn.className = "turn assistant";
+  turn.innerHTML = `<div class="role-label assistant">DataForge</div>`;
+  if (ctx.chatId === state.chatId && state.view === "chat") {
+    conversation.appendChild(turn);
+    scrollBottom();
+  }
+  ctx.run.turns.push(turn);
+  return turn;
+}
+// Save a reply into the chat the run belongs to, wherever the user is now
+function recordReply(ctx, msg) {
+  ctx.chat.messages.push(msg);
+  saveRunChat(ctx);
+}
+function saveRunChat(ctx) {
+  if (ctx.chatId === state.chatId) return saveCurrentChat();
+  ctx.chat.updatedAt = Date.now();
+  saveDB();
+  renderSidebar();
+}
 
 // Per-chat links to server-side state: { datasetId, csvRaw, agentSessionId }.
 // Kept in memory only, like the backend's dataset store, so dataforge_db is
@@ -932,11 +982,14 @@ function renderSidebar() {
   recents.slice(0, 50).forEach(({ proj, chat }) => {
     const item = document.createElement("button");
     const active = chat.id === state.chatId && state.view === "chat";
+    const busy = runs.has(chat.id);
     item.className = "chat-item" + (active ? " active" : "");
     if (active) item.setAttribute("aria-current", "true");
     const title = chat.title || "Untitled chat";
-    item.title = showProject ? `${title} (${proj.name})` : title;
-    item.innerHTML = escHtml(title) + (showProject ? `<span class="chat-proj">${escHtml(proj.name)}</span>` : "");
+    item.title = (showProject ? `${title} (${proj.name})` : title) + (busy ? " · working…" : "");
+    item.innerHTML = escHtml(title) +
+      (busy ? `<span class="chat-busy" role="status" aria-label="working"></span>` : "") +
+      (showProject ? `<span class="chat-proj">${escHtml(proj.name)}</span>` : "");
     item.addEventListener("click", () => loadChat(proj.id, chat.id));
     list.appendChild(item);
   });
@@ -994,6 +1047,7 @@ function openProject(projectId) {
   state.file = null;
   state.agentSessionId = null;
   attachedFile.classList.remove("visible");
+  updateSendBtn();
   renderProjectView();
   showView("project");
   msgInput.placeholder = `Start a new chat in ${proj.name}`;
@@ -1071,7 +1125,11 @@ function loadChat(projectId, chatId) {
   showView("chat");
   renderChatHeader();
 
-  state.messages.forEach(msg => replayMessage(msg));
+  // A reply still running here: show what was saved before it, then its live turns
+  const run = runs.get(chatId);
+  state.messages.slice(0, run ? run.msgStart : undefined).forEach(msg => replayMessage(msg));
+  run?.turns.forEach(turn => conversation.appendChild(turn));
+  updateSendBtn();
   scrollBottom();
 }
 
@@ -1113,14 +1171,13 @@ function startNewChat(projectId = db.projects[0].id) {
   state.chatId   = null;
   state.messages = [];
   state.file     = null;
-  stopRun();
   state.agentSessionId = null;   // a new chat gets its own agent kernel
-  state.streaming = false;
+  // any reply still running in the previous chat carries on in the background
 
   attachedFile.classList.remove("visible");
   msgInput.value = "";
   msgInput.style.height = "auto";
-  sendBtn.disabled = true;
+  updateSendBtn();     // back to Send: the Stop button belonged to the other chat
   conversation.innerHTML = "";
   showView("welcome");
 }
@@ -1131,7 +1188,7 @@ function createChatRecord() {
   const chat = { id: uid(), title: "New chat", messages: [], file: null, createdAt: now, updatedAt: now };
   proj.chats.push(chat);
   state.chatId = chat.id;
-  state.messages = [];
+  state.messages = chat.messages;   // one array: a run saving into the chat updates the view's list too
   conversation.innerHTML = "";
   saveDB();
 }
@@ -1193,7 +1250,7 @@ document.getElementById("welcome-attach").addEventListener("click", () => fileIn
 
 // ── Input ──
 function updateSendBtn() {
-  if (state.streaming) {           // while a reply is in progress the button stops it
+  if (runningHere()) {             // while this chat's reply is in progress the button stops it
     sendBtn.disabled = false;
     sendBtn.classList.add("stop");
     sendBtn.title = "Stop (Esc)";
@@ -1208,12 +1265,13 @@ function updateSendBtn() {
   sendBtn.disabled = msgInput.value.trim() === "" && !state.file;
 }
 
-// Aborting the request makes the backend cancel the run (and Ollama stop generating)
+// Stops the reply in the chat on screen (others keep going). Aborting the
+// request makes the backend cancel the run (and Ollama stop generating).
 function stopRun() {
-  state.abort?.abort();
+  runs.get(state.chatId)?.abort.abort();
 }
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape" && state.streaming) stopRun();
+  if (e.key === "Escape" && runningHere()) stopRun();
 });
 
 msgInput.addEventListener("input", () => {
@@ -1226,10 +1284,10 @@ msgInput.addEventListener("input", () => {
 msgInput.addEventListener("keydown", e => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
-    if (!sendBtn.disabled && !state.streaming) submit();
+    if (!sendBtn.disabled && !runningHere()) submit();
   }
 });
-sendBtn.addEventListener("click", () => { if (state.streaming) stopRun(); else submit(); });
+sendBtn.addEventListener("click", () => { if (runningHere()) stopRun(); else submit(); });
 
 // ── File attach ──
 attachBtn.addEventListener("click", () => fileInput.click());
@@ -1256,7 +1314,7 @@ function setFile(file) {
 
 // ── Submit ──
 async function submit() {
-  if (state.streaming) return;
+  if (runningHere()) return;
   const text = msgInput.value.trim();
   if (!text && !state.file) return;
 
@@ -1272,16 +1330,13 @@ async function submit() {
 
   msgInput.value = "";
   msgInput.style.height = "auto";
-  sendBtn.disabled = true;
 
   // Update chat title from first message
-  const proj = db.projects.find(p => p.id === state.projectId);
-  const chat = proj?.chats.find(c => c.id === state.chatId);
+  const chat = currentChat();
   if (chat && chat.title === "New chat" && (text || state.file?.name)) {
     chat.title = (text || state.file.name).slice(0, 40);
-    saveDB();
-    renderSidebar();
   }
+  saveCurrentChat();
   renderChatHeader();
 
   const fileToUpload = state.file?.fileObj || null;
@@ -1292,40 +1347,47 @@ async function submit() {
     fileInput.value = "";
   }
 
-  // Upload + EDA
-  if (fileToUpload) {
-    const edaTurn = addAssistantTurn();
-    showTyping(edaTurn, "Reading the file");
-    try {
-      const form = new FormData();
-      form.append("file", fileToUpload);
-      const res = await fetch(`${API}/upload/`, { method: "POST", body: form });
-      if (!res.ok) throw new Error((await res.json()).detail);
-      const data = await res.json();
-      state.file = { ...fileRef, profile: data.profile, datasetId: data.dataset_id, fileObj: null };
-      state.agentSessionId = null;   // new dataset → fresh agent kernel
-      hideTyping(edaTurn);
-      renderEdaResponse(edaTurn, data.profile, fileToUpload.name, fileToUpload);
+  // Everything below belongs to this chat, even if the user switches away meanwhile
+  const ctx = { chatId: state.chatId, chat, agentSessionId: state.agentSessionId };
+  ctx.run = beginRun(ctx);
+  try {
+    // Upload + EDA
+    if (fileToUpload) {
+      const edaTurn = addRunTurn(ctx);
+      showTyping(edaTurn, "Reading the file");
+      try {
+        const form = new FormData();
+        form.append("file", fileToUpload);
+        const res = await fetch(`${API}/upload/`, { method: "POST", body: form, signal: ctx.run.abort.signal });
+        if (!res.ok) throw new Error((await res.json()).detail);
+        const data = await res.json();
+        const file = { ...fileRef, profile: data.profile, datasetId: data.dataset_id, fileObj: null };
+        ctx.agentSessionId = null;   // new dataset → fresh agent kernel
+        ctx.chat.file = { name: file.name, profile: file.profile };
+        rememberLive(ctx.chatId, { datasetId: file.datasetId, csvRaw: smallCsvFallback(file) || undefined, agentSessionId: null });
+        if (ctx.chatId === state.chatId) { state.file = file; state.agentSessionId = null; }
+        hideTyping(edaTurn);
+        renderEdaResponse(edaTurn, data.profile, fileToUpload.name, fileToUpload);
+        recordReply(ctx, { role: "assistant", text: "", edaProfile: data.profile, filename: fileToUpload.name });
 
-      const edaMsg = { role: "assistant", text: "", edaProfile: data.profile, filename: fileToUpload.name };
-      state.messages.push(edaMsg);
-      saveCurrentChat();
-
-      if (text) await sendChat(text, state.file, modeSelect.value);
-    } catch (e) {
-      hideTyping(edaTurn);
-      appendError(edaTurn, `Couldn't read ${fileToUpload.name}: ${e.message}`);
+        if (text) await sendChat(text, file, modeSelect.value, ctx);
+      } catch (e) {
+        hideTyping(edaTurn);
+        if (e.name === "AbortError") showStopped(edaTurn, ctx);
+        else appendError(edaTurn, `Couldn't read ${fileToUpload.name}: ${e.message}`);
+      }
+      return;
     }
-    return;
-  }
 
-  const mode = modeSelect.value;
-  // With no file, the backend answers general questions and replies
-  // "needs_file" only when the question needs the user's data
-  await sendChat(text, fileRef, mode);
+    // With no file, the backend answers general questions and replies
+    // "needs_file" only when the question needs the user's data
+    await sendChat(text, fileRef, modeSelect.value, ctx);
+  } finally {
+    endRun(ctx);
+  }
 }
 
-function showNeedsFile(turn, message) {
+function showNeedsFile(turn, message, ctx) {
   appendText(turn, message);
   const row = document.createElement("div");
   row.className = "needs-file-row";
@@ -1335,9 +1397,8 @@ function showNeedsFile(turn, message) {
   btn.addEventListener("click", () => fileInput.click());
   row.appendChild(btn);
   turn.appendChild(row);
-  state.messages.push({ role: "assistant", text: message });
-  saveCurrentChat();
-  scrollBottom();
+  recordReply(ctx, { role: "assistant", text: message });
+  scrollBottom(turn);
 }
 
 function linkList(items) {
@@ -1365,7 +1426,7 @@ function showSearch(turn, data) {
     note.appendChild(linkList(data.results));
   }
   turn.appendChild(note);
-  scrollBottom();
+  scrollBottom(turn);
 }
 // Pages a cloud answer drew on (Claude's web search)
 function showSources(turn, sources) {
@@ -1377,7 +1438,7 @@ function showSources(turn, sources) {
   turn.appendChild(note);
 }
 
-function showStopped(turn) {
+function showStopped(turn, ctx) {
   // a step that was mid-run when stopped
   turn.querySelectorAll(".agent-step-label").forEach(label => {
     if (!label.querySelector(".spin")) return;
@@ -1388,23 +1449,19 @@ function showStopped(turn) {
   p.className = "msg-body stopped";
   p.textContent = "Stopped.";
   turn.appendChild(p);
-  state.messages.push({ role: "assistant", text: "Stopped." });
-  saveCurrentChat();
-  scrollBottom();
+  recordReply(ctx, { role: "assistant", text: "Stopped." });
+  scrollBottom(turn);
 }
 
-async function sendChat(text, fileRef, mode) {
-  if (mode === "agent") return sendAgent(text, fileRef);
-  const assistantTurn = addAssistantTurn();
+async function sendChat(text, fileRef, mode, ctx) {
+  if (mode === "agent") return sendAgent(text, fileRef, ctx);
+  const assistantTurn = addRunTurn(ctx);
   showTyping(assistantTurn);
-  state.streaming = true;
-  state.abort = new AbortController();
-  updateSendBtn();
 
   try {
     const res = await fetch(`${API}/chat/`, {
       method: "POST",
-      signal: state.abort.signal,
+      signal: ctx.run.abort.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: text, context: buildContext(fileRef?.profile), mode }),
     });
@@ -1412,30 +1469,24 @@ async function sendChat(text, fileRef, mode) {
     if (!res.ok) throw new Error(data.detail || "Chat error");
     if (data.needs_file) {
       hideTyping(assistantTurn);
-      showNeedsFile(assistantTurn, data.response);
+      showNeedsFile(assistantTurn, data.response, ctx);
       return;
     }
 
     hideTyping(assistantTurn);
     const full = data.response || "";
-    renderAssistantContent(assistantTurn, full, fileRef || state.file);
-
-    state.messages.push({ role: "assistant", text: full });
-    saveCurrentChat();
+    renderAssistantContent(assistantTurn, full, fileRef);
+    recordReply(ctx, { role: "assistant", text: full });
   } catch (e) {
     hideTyping(assistantTurn);
-    if (e.name === "AbortError") showStopped(assistantTurn);
+    if (e.name === "AbortError") showStopped(assistantTurn, ctx);
     else appendError(assistantTurn, `No answer from the model: ${e.message}`);
-  } finally {
-    state.streaming = false;
-    state.abort = null;
-    updateSendBtn();
   }
 }
 
 // Only ship raw CSV over the wire for small files — big data lives server-side
 function smallCsvFallback(fileRef) {
-  const csv = fileRef?.csvRaw || state.file?.csvRaw || "";
+  const csv = fileRef?.csvRaw || "";
   return csv.length < 2_000_000 ? csv : "";
 }
 
@@ -1463,27 +1514,24 @@ document.getElementById("workspace-btn").addEventListener("click", async () => {
 });
 
 // ── Agent mode: SSE loop with live steps ──
-async function sendAgent(text, fileRef) {
-  const chatId = state.chatId;
-  const turn = addAssistantTurn();
+async function sendAgent(text, fileRef, ctx) {
+  const chatId = ctx.chatId;
+  const turn = addRunTurn(ctx);
   showTyping(turn, "Planning");
-  state.streaming = true;
-  state.abort = new AbortController();
-  updateSendBtn();
 
   try {
     const res = await fetch(`${API}/agent/`, {
       method: "POST",
-      signal: state.abort.signal,
+      signal: ctx.run.abort.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message: text,
-        context: buildContext(fileRef?.profile || state.file?.profile),
-        dataset_id: fileRef?.datasetId || state.file?.datasetId || null,
+        context: buildContext(fileRef?.profile),
+        dataset_id: fileRef?.datasetId || null,
         // raw CSV only as a small-file fallback (e.g. backend restarted);
         // big files are referenced server-side by dataset_id
         csv_data: smallCsvFallback(fileRef),
-        session_id: state.agentSessionId || null,
+        session_id: ctx.agentSessionId || null,
       }),
     });
     if (!res.ok) throw new Error((await res.text()) || "Agent error");
@@ -1511,39 +1559,35 @@ async function sendAgent(text, fileRef) {
           if (state.chatId === chatId) state.agentSessionId = data.session_id;
           showTyping(turn, "Planning");
         } else if (ev === "code") {
-          currentStep = addAgentStep(turn, data.step, data.code);
+          currentStep = addAgentStep(turn, data.step, data.code, fileRef);
         } else if (ev === "result") {
           finishAgentStep(currentStep, data);
           showTyping(turn, data.error ? "Revising the code" : "Thinking about the next step");
         } else if (ev === "search") {
           showSearch(turn, data);
         } else if (ev === "final") {
-          renderAssistantContent(turn, data.content || "", fileRef || state.file);
+          renderAssistantContent(turn, data.content || "", fileRef);
           showSources(turn, data.sources);
-          state.messages.push({ role: "assistant", text: data.content || "", sources: data.sources || null });
-          saveCurrentChat();
+          recordReply(ctx, { role: "assistant", text: data.content || "", sources: data.sources || null });
         } else if (ev === "recommendations") {
           renderRecommendations(turn, data.items, { stuck: data.stuck });
           // attach to the answer just saved so they come back when the chat is reopened
-          const last = state.messages[state.messages.length - 1];
-          if (last?.role === "assistant") { last.recs = { items: data.items, stuck: data.stuck }; saveCurrentChat(); }
+          const last = ctx.chat.messages[ctx.chat.messages.length - 1];
+          if (last?.role === "assistant") { last.recs = { items: data.items, stuck: data.stuck }; saveRunChat(ctx); }
         } else if (ev === "needs_file") {
-          showNeedsFile(turn, data.message);
+          showNeedsFile(turn, data.message, ctx);
         } else if (ev === "error") {
           appendError(turn, data.message);
         }
-        scrollBottom();
+        scrollBottom(turn);
       }
     }
   } catch (e) {
     hideTyping(turn);
-    if (e.name === "AbortError") showStopped(turn);
+    if (e.name === "AbortError") showStopped(turn, ctx);
     else appendError(turn, `The agent stopped: ${e.message}`);
   } finally {
     hideTyping(turn);
-    state.streaming = false;
-    state.abort = null;
-    updateSendBtn();
   }
 }
 
@@ -1557,16 +1601,16 @@ function stepsContainer(turn) {
   return list;
 }
 
-function addAgentStep(turn, step, code) {
+function addAgentStep(turn, step, code, fileRef) {
   const el = document.createElement("div");
   el.className = "agent-step";
   el.dataset.step = step;
   el.innerHTML = `
     <div class="agent-step-label">${icon("circle-notch", "spin")}<span>Step ${escHtml(step)}</span><span class="state">Running code</span></div>
     <details><summary>${icon("caret-right")}Code</summary></details>`;
-  el.querySelector("details").appendChild(buildCodeBlock("python", code, state.file));
+  el.querySelector("details").appendChild(buildCodeBlock("python", code, fileRef));
   stepsContainer(turn).appendChild(el);
-  scrollBottom();
+  scrollBottom(turn);
   return el;
 }
 
@@ -1591,7 +1635,7 @@ function finishAgentStep(stepEl, data) {
     label.innerHTML = `${icon("check")}<span>Step ${n}</span><span class="state">Done</span>`;
     renderExecutionResult(stepEl, data);
   }
-  scrollBottom();
+  scrollBottom(stepEl);
 }
 
 // ── DOM helpers ──
@@ -1632,7 +1676,7 @@ function showTyping(turn, label = "Thinking") {
       sec >= 60  ? `Still working, ${Math.floor(sec / 60)} min so far. The local model is slower than cloud AI.` :
       sec >= 20  ? "Still working. Local models take a little longer." : "";
   }, 1000);
-  turn.appendChild(t); scrollBottom();
+  turn.appendChild(t); scrollBottom(turn);
 }
 function hideTyping(turn) {
   turn.querySelectorAll("[data-typing]").forEach(e => { clearInterval(e._timer); e.remove(); });
@@ -1641,13 +1685,13 @@ function hideTyping(turn) {
 function appendText(turn, text) {
   const p = document.createElement("div");
   p.className = "msg-body"; p.textContent = text;
-  turn.appendChild(p); scrollBottom();
+  turn.appendChild(p); scrollBottom(turn);
 }
 function appendError(turn, text) {
   const p = document.createElement("div");
   p.className = "msg-body error-text"; p.setAttribute("role", "alert");
   p.textContent = text;
-  turn.appendChild(p); scrollBottom();
+  turn.appendChild(p); scrollBottom(turn);
 }
 
 function pct(part, whole) {
@@ -1731,7 +1775,7 @@ function renderEdaResponse(turn, profile, filename, fileObj) {
   row.appendChild(note);
   turn.appendChild(row);
 
-  scrollBottom();
+  scrollBottom(turn);
 }
 
 // Clickable next-step suggestions computed from the data (services/recommend.py).
@@ -1763,7 +1807,7 @@ function renderRecommendations(turn, items, { title, stuck = false } = {}) {
     list.appendChild(btn);
   });
   turn.appendChild(list);
-  scrollBottom();
+  scrollBottom(turn);
 }
 
 function buildPlotSuggestions(numeric, categ, dateCol) {
@@ -1873,7 +1917,7 @@ function renderAutoAnalyzeResult(turn, data) {
     });
   }
 
-  scrollBottom();
+  scrollBottom(turn);
 }
 
 // ── Assistant rich content ──
@@ -1894,7 +1938,7 @@ function renderAssistantContent(turn, text, fileRef) {
       turn.appendChild(buildCodeBlock(part.lang, part.content, fileRef));
     }
   });
-  scrollBottom();
+  scrollBottom(turn);
 }
 
 function splitByCodeBlocks(text) {
@@ -2064,7 +2108,7 @@ function renderExecutionResult(turn, data) {
   if (!charts.length && !data.table?.length && !data.stdout) {
     appendText(turn, "The code ran and printed nothing.");
   }
-  scrollBottom();
+  scrollBottom(turn);
 }
 
 // ── Helpers ──
@@ -2074,9 +2118,11 @@ function buildContext(profile) {
 }
 // Coalesce bursts of scroll requests (e.g. every SSE event in the agent loop)
 // into one scroll per animation frame instead of one forced-reflow per call.
+// `turn`: what changed. A reply running in the background (its turn not on
+// screen) must not scroll the chat the user is reading.
 let _scrollQueued = false;
-function scrollBottom() {
-  if (_scrollQueued) return;
+function scrollBottom(turn) {
+  if (_scrollQueued || (turn && !turn.isConnected)) return;
   _scrollQueued = true;
   requestAnimationFrame(() => {
     conversation.scrollTop = conversation.scrollHeight;
